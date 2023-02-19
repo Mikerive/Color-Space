@@ -5,6 +5,18 @@ import cv2
 class ImagePlotter:
     def __init__(self, img):
         self.img = img
+        
+    def plot_histogram(self):
+        # Compute the histogram of the image
+        hist, bins = np.histogram(self.img.flatten(), 256, [0, 256])
+        
+        # Plot the histogram
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        ax[0].hist(hist)
+        ax[0].set_xlim(bins)
+        ax[0].set_ylim([0, self.img.size])
+
+        
     
     def plot_histogram_cdf(self):
         # Compute the histogram and CDF of the image
@@ -56,6 +68,8 @@ class ImagePlotter:
             ax[1, i].set_xlabel('Pixel Value')
             ax[1, i].set_ylabel('Frequency')
         plt.show()
+        
+        return H, S, V
 
     def plot_RGB(self):
          # Separate the red, green, and blue channels
@@ -81,3 +95,27 @@ class ImagePlotter:
         axes[1, 2].set_title('Blue channel histogram')
         plt.tight_layout()
         plt.show()
+        
+        return r_channel, g_channel, b_channel
+        
+    def image_with_histogram(self):
+         # Calculate the image histogram
+        histogram, bin_edges = np.histogram(self.image.flatten(), bins=256, range=(0, 256))
+
+        # Create a new figure with two subplots: one for the image and one for the histogram
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Plot the image in the first subplot
+        ax1.imshow(self.image, cmap='gray')
+        ax1.set_title('Original Image')
+
+        # Plot the histogram in the second subplot
+        ax2.bar(bin_edges[:-1], histogram, width=1)
+        ax2.set_xlim(left=0, right=256)
+        ax2.set_title('Image Histogram')
+
+        # Display the image and histogram
+        plt.show()
+        
+    
+    
