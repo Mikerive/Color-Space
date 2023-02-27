@@ -1,9 +1,10 @@
-import matplotlib.pyplot as plt
+import cv2
 import numpy as np
+import colorconversionfunctions as ccf
 
 class ColorSpace:
     def __init__(self, img):
-        self.img = img
+        self.img = np.array(img).astype(np.uint8)
     def rgb_decomposition(self):
         # Split the input image into its blue, green, and red channels
         b, g, r = self.img[:,:,0], self.img[:,:,1], self.img[:, :, 2]
@@ -11,10 +12,10 @@ class ColorSpace:
         # Return the blue, green, and red channels as a tuple
         return r, g, b
     
+    # Luminosity Method
     def rgb_to_grayscale(self, ratio=[0.2989, 0.5870, 0.1140]):
-        # Load the image and convert it to grayscale
-        image = plt.imread(self.img)
-        gray_image = np.dot(image[..., :3], ratio)
+        
+        gray_image = np.dot(self.img[..., :3], ratio)
     
 
         # # Split the RGB image into its red, green, and blue channels
@@ -23,24 +24,34 @@ class ColorSpace:
         # # Merge the noisy channels back into an RGB image
         # noisy_image = np.stack([r, g, b], axis=2)
         
+        # Add the noise to the image and cast to int
+        gray_image = np.clip(gray_image, 0, 255).astype(np.int)
+        
         return gray_image
 
-    def rgb_to_HSV(self):
-        # Convert the RGB image to HSV color space
-        R, G, B = self.img[:, :, 0], self.img[:, :, 1], self.img[:, :, 2]
-        V = np.max(self.img, axis=2)
-        S = (V - np.min(self.img, axis=2)) / V
-        H = np.zeros_like(V)
-        H[np.where(V == R)] = 60 * ((G[np.where(V == R)] - B[np.where(V == R)]) /
-                                    (V[np.where(V == R)] - np.min(self.img, axis=2)[np.where(V == R)])) % 360
-        H[np.where(V == G)] = 60 * (2 + (B[np.where(V == G)] - R[np.where(V == G)]) /
-                                    (V[np.where(V == G)] - np.min(self.img, axis=2)[np.where(V == G)])) % 360
-        H[np.where(V == B)] = 60 * (4 + (R[np.where(V == B)] - G[np.where(V == B)]) /
-                                    (V[np.where(V == B)] - np.min(self.img, axis=2)[np.where(V == B)])) % 360
-        return H, S, V
-
-    
-    
-
+    # def rgb_to_HSV(self):
+    #     img_height, img_width, img_depth = self.img.shape
         
+    #     output = np.ones(self.img.shape)
+        
+    #     for i in range(0, img_height):
+    #         for j in range(0, img_width):
+    #             h, s, v = ccf.rgb_to_hsv(self.img[i, j, 0], self.img[i, j, 1], self.img[i, j, 2])
+    #             output[i,j,0] = h
+    #             output[i,j,1] = s
+    #             output[i,j,2] = v
+    #     return output
+
+
+    # def rgb_to_HSV(self):
+    #     output = np.ones(self.img.shape)
+    #     args = (self.img[..., 0], self.img[..., 1], self.img[..., 2])
+    #     output[..., 0], output[..., 1], output[..., 2] = np.apply_along_axis(ccf.rgb_to_hsv, 2, *args)
+    #     return output
+    
+    def rgb_to_HSV(self):
+        return cv2.cvtColor(self.img, cv2.COLOR_RGB2HSV)
+
+                
+    
     
