@@ -6,7 +6,9 @@ from PIL import Image
 
 __all__ = ["plot_HSV", "plot_RGB", "plot_image_with_histogram", "save_image_to_folder",
            "load_image_from_file", "create_subimage", "get_image_type", "plot_images_with_histograms",
-           "plot_images_and_noise_with_histograms"]
+           "plot_images_and_noise_with_histograms", "split_image",
+           "split_image_nxn_sections", "merge_sections_into_image", "apply_function_nxn_sections",
+           "show_image_sections"]
 
 
 def plot_HSV(img):
@@ -302,4 +304,93 @@ def plot_images_and_noise_with_histograms(images, noises, titles=None):
         axes[i, 2].axvline(x=mean+np.sqrt(variance), color='b', linestyle='--')
         axes[i, 2].legend()
         
+    plt.show()
+
+
+# Functions to apply a function to sections
+
+def split_image_nxn_sections(img, sections):
+    
+    # Get the size of the image
+    height, width = img.shape[:2]
+
+    # Calculate the height of each section
+    section_height = int(np.ceil(height / sections))
+
+    # Calculate the width of each section
+    section_width = int(np.ceil(width / sections))
+
+    # Initialize the list to store the sections
+    section_list = []
+
+    # Split the image into sections
+    for row in range(0, height, section_height):
+        for col in range(0, width, section_width):
+            section = img[row:row + section_height, col:col + section_width]
+            section_list.append(section)
+
+    # Return the output wrapped in a dictionary
+    return {
+        'section_list': section_list,
+        'section_height': section_height,
+        'section_width': section_width,
+        'height': height,
+        'width': width,
+    }
+
+def merge_sections_into_image(section_dict):
+    # Get the number of channels from the first section
+    num_channels = section_dict['section_list'][0].shape[2]
+
+    # Initialize the result image with the correct number of channels
+    result_img = np.zeros((section_dict['height'], section_dict['width'], num_channels), dtype=np.uint8)
+
+    # Merge the sections into a single image
+    index = 0
+    for row in range(0, section_dict['height'], section_dict['section_height']):
+        for col in range(0, section_dict['width'], section_dict['section_width']):
+            section = section_dict['section_list'][index]
+            result_img[row:row + section_dict['section_height'],
+                       col:col + section_dict['section_width'], :] = section
+            index += 1
+
+    return result_img
+
+def func_pass(x): return x
+
+def apply_function_nxn_sections(section_dict, func1=[func_pass], func2=[func_pass], func3=[func_pass], *args):
+    
+    L, A, B = cv2.split(section_dict['section_list'])
+
+    L = [func1(section[:,:,0], *args) for section in section_dict['section_list']]
+    A = [func2(section[:,:,1], *args) for section in section_dict['section_list']]
+    B = [func3(section[:,:,2], *args) for section in section_dict['section_list']]
+    
+    # Apply the functions to each section
+    results = [function(section, *args) for section in section_dict['section_list']]
+
+    # Return the output
+    return {
+        'section_list': results,
+        'section_height': section_dict['section_height'],
+        'section_width': section_dict['section_width'],
+        'height': section_dict['height'],
+        'width': section_dict['width'],
+    }
+
+def show_image_sections(section_dict):
+    # Calculate the number of rows and columns for the plot
+    n_rows = int(np.sqrt(len(section_dict['section_list'])))
+    n_cols = int(np.ceil(len(section_dict['section_list']) / n_rows))
+
+    # Create a figure with subplots
+    fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
+    ax = ax.ravel()
+
+    # Plot each section in its own subplot
+    for i, section in enumerate(section_dict['section_list']):
+        ax[i].imshow(section)
+        ax[i].axis('off')
+
+    plt.tight_layout()
     plt.show()

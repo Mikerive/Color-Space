@@ -1,6 +1,7 @@
+from PIL import Image
 import cv2
 import numpy as np
-import colorconversionfunctions as ccf
+import ip.colorconversionfunctions as ccf
 
 class ColorSpace:
     def __init__(self, img):
@@ -48,9 +49,20 @@ class ColorSpace:
     #     args = (self.img[..., 0], self.img[..., 1], self.img[..., 2])
     #     output[..., 0], output[..., 1], output[..., 2] = np.apply_along_axis(ccf.rgb_to_hsv, 2, *args)
     #     return output
-    
-    def rgb_to_HSV(self):
-        return cv2.cvtColor(self.img, cv2.COLOR_RGB2HSV)
+
+
+def rgb_to_HSV(image):
+    # Convert the NumPy array to a Pillow Image
+    pil_image = Image.fromarray(np.uint8(image))
+
+    # Convert the image to the HSV color space
+    hsv_image = pil_image.convert('HSV')
+
+    # Convert the HSV image back to a NumPy array
+    hsv_array = np.array(hsv_image)
+
+    return hsv_array
+
 
                 
     
