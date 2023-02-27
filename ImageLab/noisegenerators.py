@@ -4,11 +4,8 @@ import numpy as np
 class NoiseOverlay:
     def __init__(self, img):
         self.img = np.array(img)
-        
-        if np.ndim(img) == 2:
+        if np.ndim(self.img) == 2:
             self.img = np.expand_dims(self.img, axis=2)
-        
-        
         
     # Noise is a single layer based on an image
     def gaussian_noise(self, mean, variance):

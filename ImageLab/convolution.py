@@ -1,5 +1,5 @@
 import numpy as np
-from imageutils import ImageUtils
+import imageutils
 import inspect
 
 class Convolution:
@@ -8,8 +8,6 @@ class Convolution:
         self.img = np.array(img)
         self.img_name = img_name
         
-    
-    
     def convolve(self, weight_matrix, convfunction, layers = [0,1,2]):
         
         # If 2d, make 3d
@@ -100,14 +98,11 @@ class Conv_Functions:
 
     def midpoint(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
         return np.uint8((np.max(arr) + np.min(arr))/2)
-    
-    
-    
-
-    # Shave an alpha ratio of the sorted pixels from the left most and right most indexes and return the average of the remaining indexes
-    # Alpha 0.5 = median, Alpha 0 = mean
 
     def alpha_trim_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], alpha=0.3):
+        # Shave an alpha ratio of the sorted pixels from the left most and right most indexes and return the average of the remaining indexes
+        # Alpha 0.5 = median, Alpha 0 = mean
+        
         # Create a flat version of the input array
         flat_arr = arr.flatten()
 
