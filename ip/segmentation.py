@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import imageutils as iu
+from colorspace import ColorSpace
 
 
 def segment_image(img):
@@ -98,7 +99,7 @@ def global_multiple_threshold(image, thresholds, mode = 'mean'):
     
     # Ensure the image is grayscale
     if len(image.shape) > 2:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = ColorSpace(image)
 
     # Initialize the segmented image to all black pixels
     segmented = np.zeros_like(image)
