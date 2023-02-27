@@ -8,7 +8,13 @@ class QualityMeasures:
     
     # EME - we want to maximize the difference between I max and I min. C should be 1.
     def measure_EME(self, img):
-        pass
+        # Compute the amplitude of the color range
+        amplitude = np.ptp(img) / 2
+
+        # Compute the EME
+        EME = amplitude ** 2
+
+        return EME
     
     def histogram_distance_euclidian(self, other_img : np.ndarray):
         
@@ -21,4 +27,4 @@ class QualityMeasures:
         # Calculate the image histogram
         histogram2, bin_edges = np.histogram(
             other_img.flatten(), bins=256, range=(0, 256))
-        return np.abs(np.sum(histogram1 - histogram2))
+        return np.sum(np.abs(histogram1 - histogram2))
