@@ -3,7 +3,7 @@ import numpy as np
 
 class NoiseOverlay:
     def __init__(self, img):
-        self.img = np.array(img)
+        self.img = np.asarray(img)
         if np.ndim(self.img) == 2:
             self.img = np.expand_dims(self.img, axis=2)
         

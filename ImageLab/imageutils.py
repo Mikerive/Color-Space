@@ -4,9 +4,11 @@ import cv2
 import os
 from PIL import Image
 
-__all__ = ["ImageUtil", "ImagePlotter", "Multiplotter", "Tilation", "get_image_type"]
+__all__ = ["ImageUtil", "ImagePlotter", "Multiplotter", "Tilation"]
 
 class ImageUtil:
+    # Deals with PIL objects
+    
     def __init__(self, img = None):
         if img == None:
             img = np.full((10,10), 1)
@@ -64,8 +66,10 @@ class ImageUtil:
         return img
 
     def create_subimage(self, x_start, y_start, x_end, y_end):
+        
+        img = np.asarray(self.img)
         # Create the subimage
-        subimg = self.img[y_start:y_end, x_start:x_end, :]
+        subimg = img[y_start:y_end, x_start:x_end, :]
 
         return subimg
     
@@ -74,10 +78,11 @@ class ImageUtil:
         output = Image.fromarray(np.uint8(img))
         self.img = output
         return output
-# Intake Pillow images
+
 class ImagePlotter(ImageUtil):
-    def __init__(self) -> None:
-        pass
+    def __init__(self, img):
+        super().__init__(self, img)
+        
     def plot_HSV(self):
         # Separate the layers 0, 1, and 2
         H = self.img[:, :, 0]
@@ -204,20 +209,20 @@ class ImagePlotter(ImageUtil):
         # Display the image and histogram
         plt.show()
     
-# Intake Pillow images   
 class MultiPlotter(ImageUtil):
+    #Takes Pillow Objects
     def __init__(self, image_list):
         self.images = image_list
         self.image_dict = None
         
-    def plot_images_with_histograms(self, images, titles = None):
+    def plot_images_with_histograms(self, titles = None):
         """
         Plots an array of images vertically with histograms for each image.
         """
-        fig, axes = plt.subplots(nrows=len(images), ncols=2, figsize=(8, 3*len(images)))
+        fig, axes = plt.subplots(nrows=len(self.images), ncols=2, figsize=(8, 3*len(self.images)))
         plt.subplots_adjust(hspace=0.3)
 
-        for i, img in enumerate(images):
+        for i, img in enumerate(self.images):
             
             type = self.get_image_type(img)
             
@@ -322,9 +327,8 @@ class MultiPlotter(ImageUtil):
             
         plt.show()
 
-# Intake a Pillow Image
-# Output a Pillow Image
 class Tilation(ImageUtil):
+    #Takes Pillow Objects
     def __init__(self, img):
         self.img = img
         type = self.get_image_type(img)

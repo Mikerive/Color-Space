@@ -2,13 +2,10 @@ import numpy as np
 
 class NoiseEstimator:
     def __init__(self, img):
-        
-        self.img = np.array(img)
-        
+        self.img = np.asarray(img)
         if np.ndim(self.img) == 2:
             self.img = np.expand_dims(self.img, axis=2)
             
-        
     # Estimates pepper noise on a single layer
     def pepper_noise_estimator(self, layer = [0,1,2]):
         if self.img.shape[2]==1:

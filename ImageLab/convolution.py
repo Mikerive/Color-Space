@@ -1,11 +1,10 @@
 import numpy as np
-import imageutils
+from imageutils import ImageUtil
 import inspect
 
 class Convolution:
     def __init__(self, img, img_name):
-        print("Input image:", img)
-        self.img = np.array(img)
+        self.img = np.asarray(img)
         self.img_name = img_name
         
     def convolve(self, weight_matrix, convfunction, layers = [0,1,2]):
@@ -42,9 +41,9 @@ class Convolution:
                     
         output_image = np.clip(output_image, 0, 255).astype(np.uint8)
         
-        path = ImageUtils(output_image).save_image_to_folder('Image/Convolution/', f"{self.img_name}.png")
+        path = ImageUtil(output_image).save_image_to_folder('Image/Convolution/', f"{self.img_name}.png")
         
-        return output_image
+        return output_image, path
 
 # Convenience class to import many functions with one call
 class Conv_Functions:
@@ -60,7 +59,6 @@ class Conv_Functions:
         
         return np.uint8(weighted_sum)
 
-
     def weighted_geometric_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
         # Normalize the weight matrix
         weight_matrix = np.array(weight_matrix) / np.sum(weight_matrix)
@@ -72,7 +70,6 @@ class Conv_Functions:
         weighted_geometric_mean = np.power(weighted_product, 1.0 / np.sum(weight_matrix))
 
         return np.uint8(weighted_geometric_mean)
-
 
     def weighted_median(arr, weight_matrix = [[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
         
@@ -99,7 +96,7 @@ class Conv_Functions:
     def midpoint(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
         return np.uint8((np.max(arr) + np.min(arr))/2)
 
-    def alpha_trim_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], alpha=0.3):
+    def wieghted_alpha_trim_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], alpha=0.3):
         # Shave an alpha ratio of the sorted pixels from the left most and right most indexes and return the average of the remaining indexes
         # Alpha 0.5 = median, Alpha 0 = mean
         
