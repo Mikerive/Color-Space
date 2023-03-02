@@ -10,6 +10,11 @@ class Segment:
     def __init__(self, img=np.full((10, 10), 1), name='default'):
         self.img = np.asarray(img).astype(int)
         self.img_name = name
+        
+        # If 2d, make 3d
+        if (self.img.ndim == 2):
+            layers = [0]
+            self.img = np.expand_dims(self.img, axis=2)
             
     def segment_image(self, distance=10, width=8):
         # Calculate the histogram of the image
@@ -30,7 +35,7 @@ class Segment:
                 start = minima[i]
             
             # If not the last peak, the next center is halfway between the two peaks, else it continues till the end.
-            end = minima[i+1] // 2 if i < len(minima) - 1 else 255
+            end = minima[i+1] if i < len(minima) - 1 else 255
             ranges.append((start, end))
 
         # Create a binary mask for each range of pixel values
@@ -75,44 +80,97 @@ class Segment:
         # If T is within three pixels of the last T, update and terminate while loop
         done = False
         while done == False:
-            img1, img2 = np.zeros_like(image)
+            img1, img2 = np.zeros_like(image), np.zeros_like(image)
             img1, img2 = image[image<threshold], image[image>threshold]
             thresholdnext = (np.mean(img1)+np.mean(img2))//2
             if abs(thresholdnext-threshold) < deltaT:
                 done = True
             threshold = thresholdnext
         
+        # Show the original image and its histogram
+        ImagePlotter(self.img).plot_image_with_histogram(title=f'{self.img_name}')
+        
         # Create a binary mask by comparing the image with the threshold value
-        mask = np.zeros_like(image)
-        mask[image >= threshold] = 1
-
-        # Multiply the mask by 255 to obtain a binary image with 0s and 255s
-        output = mask * 255
+        mask1, mask2 = np.zeros_like(image), np.zeros_like(image)
         
+        mask1[image < threshold] = 255
+        mask2[image >= threshold] = 255
+        
+        ImagePlotter(mask1).plot_image_with_histogram(
+            title=f'mask 0:{threshold}')
+        ImagePlotter(mask2).plot_image_with_histogram(
+            title=f'mask {threshold}:255')
         # Clip the output image to ensure that pixel values are within [0, 255]
-        output = np.clip(output, 0, 255).astype(np.uint8)
+        output = np.clip(mask1, 0, 255).astype(np.uint8)
+        output = np.clip(mask2, 0, 255).astype(np.uint8)
 
-        return output
+        return mask1, mask2
 
 
-    def global_multiple_threshold(image, thresholds, mode = 'mean'):
+    def global_multiple_threshold(self, minima):
         
-        if mode == 'mean':
-            threshold = (np.max(image)+np.min(image))/2
+        # Find the ranges of pixel values corresponding to halfway between each peak
+        ranges = []
+        for i in range(len(minima)):
+            if i == 0:
+                start = 0
+            else:
+                start = minima[i]
+
+            # If not the last peak, the next center is halfway between the two peaks, else it continues till the end.
+            end = minima[i+1] if i < len(minima) - 1 else 255
+            ranges.append((start, end))
+
+        # Create a binary mask for each range of pixel values
+        masks = []
+        for r in ranges:
+            # Values within the range arr assigned 255, the rest 0
+            mask = np.zeros_like(self.img)
+            mask[(self.img >= r[0]) & (self.img <= r[1])] = 255
+            masks.append(mask)
+
+        # Show the original image and its histogram
+        ImagePlotter(self.img).plot_image_with_histogram(
+            title=f'{self.img_name}')
+
+        # Show the identified objects
+        for i in range(len(masks)):
+            ImagePlotter(masks[i]).plot_image_with_histogram(
+                title=f'mask {ranges[i][0]}:{ranges[i][1]}')
+
+        return masks
+
+    def adaptive_threshold_segmentation(self, n=30, background_difference=5, deltaT = 3):
         
-        # Ensure the image is grayscale
-        if len(image.shape) > 2:
-            image = ColorSpace(image)
+        image = self.img.astype(int)
+        # Show the original image and its histogram
+        ImagePlotter(self.img).plot_image_with_histogram(
+            title=f'{self.img_name}')
+        
+        image_dict = Tilation(image).split_image_nxn_sections(n)
+        for i, image in enumerate(image_dict['section_list']):
+            
+            # Don't Segment if the background
+            if np.max(image) - np.min(image) < background_difference:
+                image_dict['section_list'][i] = np.full(image.shape, 255)
+            else:
+                threshold = (np.max(image)+np.min(image))//2
+                # If T is within three pixels of the last T, update and terminate while loop
+                done = False
+                while done == False:
+                    img1, img2 = np.zeros_like(image), np.zeros_like(image)
+                    img1, img2 = image[image < threshold], image[image > threshold]
+                    thresholdnext = (np.mean(img1)+np.mean(img2))//2
+                    if abs(thresholdnext-threshold) < deltaT:
+                        done = True
+                    threshold = thresholdnext
 
-        # Initialize the segmented image to all black pixels
-        segmented = np.zeros_like(image)
+                # Create a binary mask by comparing the image with the threshold value
+                mask = np.zeros_like(image)
 
-        # For each threshold, create a binary image and merge it with the segmented image
-        for threshold in thresholds:
-            binary = np.where(image >= threshold, 255, 0)
-            segmented = np.maximum(segmented, binary)
-
-        # Apply a median filter to reduce noise
-        segmented = cv2.medianBlur(segmented, 3)
-
-        return segmented
+                mask[image >= threshold] = 255
+                image_dict['section_list'][i] = np.clip(mask, 0, 255).astype(np.uint8)
+                
+        Tilation(name=f'adaptive_seg_{self.img_name} {n}:{background_difference}').merge_sections_into_image(image_dict)
+        return image
+                

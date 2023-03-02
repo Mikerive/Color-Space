@@ -255,7 +255,7 @@ class ImagePlotter(ImageUtil):
     
 class MultiPlotter(ImageUtil):
     #Takes Pillow Objects
-    def __init__(self, image_list):
+    def __init__(self, image_list, name = 'default'):
         self.images = image_list
         
     def plot_images_with_histograms(self, title = 'default', cmap = None):
@@ -265,15 +265,23 @@ class MultiPlotter(ImageUtil):
 
 class Tilation(ImageUtil):
     #Takes Pillow Objects
-    def __init__(self, img):
+    def __init__(self, img=np.full((5, 5), 1), name='default'):
         self.img = img
-        type = self.get_image_type(img)
         self.section_dict = None
+        self.image_name = name
+        
 
     def split_image_nxn_sections(self, sections):
         
         # Get the size of the image
         height, width = self.img.shape[:2]
+        
+        layers = 0
+        
+        if len(self.img.shape) == 2:
+            layers = 1
+        else:
+            layers = self.img.shape[2]
 
         # Calculate the height of each section
         section_height = int(np.ceil(height / sections))
@@ -284,11 +292,20 @@ class Tilation(ImageUtil):
         # Initialize the list to store the sections
         section_list = []
 
-        # Split the image into sections
-        for row in range(0, height, section_height):
-            for col in range(0, width, section_width):
-                section = self.img[row:row + section_height, col:col + section_width]
-                section_list.append(section)
+        if layers == 1:
+            # Split the image into sections
+            for row in range(0, height, section_height):
+                for col in range(0, width, section_width):
+                    section = self.img[row:row + section_height,
+                                    col:col + section_width]
+                    section_list.append(section)
+        else:
+            # Split the image into sections
+            for row in range(0, height, section_height):
+                for col in range(0, width, section_width):
+                    section = self.img[row:row + section_height,
+                                       col:col + section_width, :]
+                    section_list.append(section)
 
         # Return the output wrapped in a dictionary
         section_dict = {
@@ -298,10 +315,10 @@ class Tilation(ImageUtil):
             'height': height,
             'width': width,
         }
-        
+        self.section_dict = section_dict
         return section_dict
 
-    def merge_sections_into_image(section_dict):
+    def merge_sections_into_image(self, section_dict):
         # Get the number of channels from the first section
         num_channels = section_dict['section_list'][0].shape[2]
 
@@ -316,7 +333,8 @@ class Tilation(ImageUtil):
                 result_img[row:row + section_dict['section_height'],
                         col:col + section_dict['section_width'], :] = section
                 index += 1
-
+                
+        ImagePlotter(result_img).plot_image_with_histogram(title=f'{self.image_name}')
         return result_img
 
     def func_pass(x): return x
