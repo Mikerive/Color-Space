@@ -1,7 +1,9 @@
-import cv2
 import numpy as np
-import matplotlib as plt
 from skimage.transform import resize
+
+from .convolution import Convolution, Conv_Functions
+from .noisegenerators import NoiseOverlay
+from .imageutils import *
 
 __all__ = ['Filters']
 
@@ -80,4 +82,49 @@ class Filters:
         self.img = img
         return img
 
+    def sharpening(self, kernel=np.array([[0, -1, 0],
+                                          [-1, 5, -1],
+                                          [0, -1, 0]])):
 
+        # Normalize the kernel
+        kernel = kernel / np.sum(kernel)
+
+        # Pad the image with zeros to handle border pixels
+        padded_image = np.pad(self.img, 1, 'constant', constant_values=0)
+
+        # Apply the kernel to the image using convolution
+        sharp = np.zeros_like(self.img)
+        for i in range(self.img.shape[0]):
+            for j in range(self.img.shape[1]):
+                sharp[i, j] = np.sum(kernel * padded_image[i:i+3, j:j+3])
+
+        # Clip the output image to ensure that pixel values are within [0, 255]
+        sharp = np.clip(sharp, 0, 255).astype(np.uint8)
+        
+        ImagePlotter(sharp).plot_image_with_histogram(
+            title=f'{self.img_name}', cmap='Greys')
+        
+        # img = self.img - sharp
+        
+        # ImagePlotter(img).plot_image_with_histogram(
+        #     title=f'{self.img_name}', cmap='Greys')
+        
+        # img = self.img + img
+        
+        # ImagePlotter(img).plot_image_with_histogram(
+        #     title=f'{self.img_name}', cmap='Greys')
+        
+        
+
+    
+    def unsharp_masking(self, mean, var):
+        noise = NoiseOverlay(self.img).add_gaussian_noise(mean, var)
+        img = np.copy(self.img)
+        sharp = img - noise
+        ImagePlotter(sharp).plot_image_with_histogram(
+            title=f'{self.img_name} {mean}:{var}', cmap='Greys')
+        sharpened = img + sharp
+        ImagePlotter(sharpened).plot_image_with_histogram(
+            title=f'{self.img_name} {mean}:{var}', cmap='Greys')
+        return sharpened
+    

@@ -1,11 +1,9 @@
-import cv2
 import numpy as np
+from .imageutils import *
 
 class NoiseOverlay:
     def __init__(self, img):
         self.img = np.asarray(img)
-        if np.ndim(self.img) == 2:
-            self.img = np.expand_dims(self.img, axis=2)
         
     # Noise is a single layer based on an image
     def gaussian_noise(self, mean, variance):
@@ -14,10 +12,17 @@ class NoiseOverlay:
         
         # Clip noise and cast to int
         noise = np.clip(noise, 0, 255).astype(np.int)
+        
+        ImagePlotter(noise).plot_image_with_histogram(title=f'Gaussian {mean} : {variance}')
 
         return noise
 
     def add_gaussian_noise(self, mean, variance, channels = [0, 1, 2], type = 'image'):
+        
+        if np.ndim(self.img) == 2:
+            channels = [0]
+            self.img = np.expand_dims(self.img, axis=2)
+        
         if type == 'noise':
             # Generate Gaussian noise
             noise = self.gaussian_noise(self.img, mean, variance)
@@ -28,7 +33,7 @@ class NoiseOverlay:
             return noise
         
         if type == 'image':
-            noisy_image = np.array(self.img)
+            noisy_image = np.copy(self.img)
             
             for i in channels:
                 # Generate Gaussian noise
@@ -41,39 +46,60 @@ class NoiseOverlay:
                 
                 noisy_image[:,:,i] = noise_layer
                 
-            return noisy_image
+            # Add the noise to the image and cast to int
+            noisy_image = np.clip(noisy_image, 0, 255).astype(np.int)
+                
+            if noisy_image.shape[2] == 1:
+                noisy_image = np.squeeze(noisy_image)
+                return noisy_image
+            else:
+                return noisy_image
         else:
             raise ValueError("type can either be image or noise")
         
     def salt_and_pepper_noise(self, density):
         noise_mask = np.random.random(self.img.shape[:2])
 
-        noise = np.full(self.img.shape[:2], 125)
+        flat_img = np.zeros(self.img.shape, dtype=np.uint8)
 
-        noise[noise_mask < density/2] = 1
-        noise[noise_mask > 1-density/2] = 255
+        flat_img[noise_mask < density/2] = 1
+        flat_img[noise_mask > 1-density/2] = 255
 
         # Clip the values of the noisy image to the valid range of pixel values (0 to 255 for uint8 images)
         noise = np.clip(noise, 0, 255).astype(np.int)
+        
+        ImagePlotter(noise).plot_image_with_histogram(
+            title=f'Impulse Image {density}')
+        
         return noise
 
-    def add_salt_and_pepper_noise(self , density, channels = None):
+    def add_salt_and_pepper_noise(self , density, channels = [0, 1, 2]):
         
-        if channels is None:
-            channels = range(self.img.shape[2])
+        if np.ndim(self.img) == 2:
+            channels = [0]
+            self.img = np.expand_dims(self.img, axis=2)
         
         noisy_image = np.copy(self.img)
         
         # For each channel to add noise to...
         for i in channels:
             # Noise Layer
-            noise_mask = np.random.random(self.img.shape)
+            noise_mask = np.random.random(self.img.shape[:2])
+            
+            # Plot Impulse Noise
+            flat_img = np.zeros(self.img.shape[:2], dtype=np.uint8)
+
+            flat_img[noise_mask < density/2] = 1
+            flat_img[noise_mask > 1-density/2] = 255
+            
+            ImagePlotter(flat_img).plot_image_with_histogram(title=f'Impulse {density}')
+            
             # Image layer
             image_layer = noisy_image[:,:,i]
             
             # Salt and Pepper
-            image_layer[noise_mask[:,:,i] < density/2] = 1
-            image_layer[noise_mask[:,:,i] > 1-density/2] = 255
+            image_layer[noise_mask < density/2] = 1
+            image_layer[noise_mask > 1-density/2] = 255
 
             # Clip the values of the noisy image to the valid range of pixel values (0 to 255 for uint8 images)
             image_layer = np.clip(image_layer, 0, 255).astype(np.uint8)
@@ -82,8 +108,12 @@ class NoiseOverlay:
             noisy_image[:,:,i] = image_layer
             
         noisy_image = np.clip(noisy_image, 0, 255).astype(np.uint8)
-            
-        return noisy_image
+        
+        if noisy_image.shape[2] == 1:
+            noisy_image = np.squeeze(noisy_image)
+            return noisy_image
+        else:
+            return noisy_image
 
     def add_equation_noise(self, equation = '0.4x+3', direction='right', magnitude=50):
         """

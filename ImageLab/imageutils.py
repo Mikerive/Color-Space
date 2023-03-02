@@ -4,22 +4,15 @@ import cv2
 import os
 from PIL import Image
 
-__all__ = ["ImageUtil", "ImagePlotter", "Multiplotter", "Tilation"]
+__all__ = ["ImageUtil", "ImagePlotter", "MultiPlotter", "Tilation"]
 
 class ImageUtil:
     # Deals with PIL objects
     
     def __init__(self, img = None):
-        if img == None:
+        if img is None:
             img = np.full((10,10), 1)
         self.img = img
-        type = self.get_image_type(img)
-
-    def get_image_type(self):
-        """
-        Returns the color type of an image as a string: 'RGB', 'HSV', or 'Grayscale'.
-        """
-        return self.img.mode
     
     def save_image_to_folder(self, folder_name, filename):
         # Create the folder if it doesn't exist
@@ -68,10 +61,15 @@ class ImageUtil:
     def create_subimage(self, x_start, y_start, x_end, y_end):
         
         img = np.asarray(self.img)
-        # Create the subimage
-        subimg = img[y_start:y_end, x_start:x_end, :]
-
-        return subimg
+        
+        if np.ndim(self.img)==2:
+            img = np.squeeze(img)
+            subimg = img[y_start:y_end, x_start:x_end]
+            return subimg
+        else:
+            # Create the subimage
+            subimg = img[y_start:y_end, x_start:x_end, :]
+            return subimg
     
     def np_to_PIL_convert(self, img):
     # Convert numpy type to PIL image
@@ -79,9 +77,47 @@ class ImageUtil:
         self.img = output
         return output
 
+    def plot_images_in_folder(self, folder_path, cmap=None):
+        # Get list of image filenames in the folder, sorted alphabetically
+        image_filenames = sorted([filename for filename in os.listdir(folder_path)
+                              if filename.endswith('.jpg') or filename.endswith('.png')])
+        
+        
+        # Loop through all files in the folder
+        for filename in image_filenames:
+            # Open the image file using PIL
+            img_path = os.path.join(folder_path, filename)
+            with Image.open(img_path) as img:
+                name = os.path.splitext(filename)[0]
+                if cmap == None:
+                    ImagePlotter(np.asarray(img)).plot_image_with_histogram(
+                        f'{name}')
+                else:
+                    # Apply the input function to the image
+                    ImagePlotter(np.asarray(img)).plot_image_with_histogram(f'{name}', cmap=cmap)
+
+    def get_image_type(self, rgb = True):
+        # Check the number of dimensions of the image array
+        if self.img.ndim == 2:
+            return 'Grayscale'
+        elif self.img.ndim == 3:
+            # Check the shape of the third dimension
+            if self.img.shape[2] == 3 and rgb == True:
+                return 'RGB'
+            elif self.img.shape[2] == 1:
+                return 'Grayscale'
+            elif self.img.shape[2] == 4:
+                return 'RGBA'
+            elif self.img.shape[2] == 2:
+                return 'grayscale_alpha'
+            elif self.img.shape[2] == 3 and rgb == False:
+                return 'HSV'
+        else:
+            return 'unknown'
+
 class ImagePlotter(ImageUtil):
     def __init__(self, img):
-        super().__init__(self, img)
+        super().__init__(img)
         
     def plot_HSV(self):
         # Separate the layers 0, 1, and 2
@@ -172,7 +208,7 @@ class ImagePlotter(ImageUtil):
         plt.tight_layout()
         plt.show()
         
-    def plot_image_with_histogram(self, title):
+    def plot_image_with_histogram(self, title, plot_text = None):
         
         # Calculate the image histogram
         histogram, bin_edges = np.histogram(self.img.flatten(), bins=256, range=(0, 256))
@@ -180,31 +216,39 @@ class ImagePlotter(ImageUtil):
         # Create a new figure with two subplots: one for the image and one for the histogram
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
         
-        type = self.get_image_type(self.img)
-
-        # Plot the image in the first subplot
-        ax1.imshow(self.img)
+        img_type = ImageUtil(self.img).get_image_type()
+        
+        if img_type == 'Grayscale':
+            ax1.imshow(self.img, cmap='gray')
+        if img_type == 'RGB':
+            ax1.imshow(self.img)
+        if img_type == 'HSV':
+            ax1.imshow(self.img, cmap='hsv')
+            
         ax1.set_title(title)
 
         # Plot the histogram in the second subplot
         ax2.bar(bin_edges[:-1], histogram, width=1)
-        ax2.set_xlim(left=0, right=256)
         ax2.set_title('{} Histogram'.format(title))
         
         # Calculate the midpoint value, mean, and variance of the histogram
-        midpoint = (np.argmax(histogram) + 1) / 2
+        mode = np.argmax(histogram)
         mean = np.mean(self.img)
         variance = np.var(self.img)
 
         # Add the midpoint value, mean, and variance to the plot
-        ax2.axvline(x=midpoint, color='r', linestyle='--',
-                        label=f"Midpoint: {midpoint:.2f}")
+        ax2.axvline(x=mode, color='r', linestyle='--',
+                        label=f"Mode: {mode:.2f}")
         ax2.axvline(x=mean, color='g', linestyle='--',
                         label=f"Mean: {mean:.2f}")
         ax2.axvline(x=mean-np.sqrt(variance), color='b',
                         linestyle='--', label=f"Variance: {variance:.2f}")
         ax2.axvline(x=mean+np.sqrt(variance), color='b', linestyle='--')
         ax2.legend()
+        
+        # Add plot text below the plot
+        if plot_text is not None:
+            plt.gcf().text(0.5, 0.01, plot_text, ha='center', fontsize=12)
 
         # Display the image and histogram
         plt.show()
@@ -213,119 +257,11 @@ class MultiPlotter(ImageUtil):
     #Takes Pillow Objects
     def __init__(self, image_list):
         self.images = image_list
-        self.image_dict = None
         
-    def plot_images_with_histograms(self, titles = None):
-        """
-        Plots an array of images vertically with histograms for each image.
-        """
-        fig, axes = plt.subplots(nrows=len(self.images), ncols=2, figsize=(8, 3*len(self.images)))
-        plt.subplots_adjust(hspace=0.3)
-
+    def plot_images_with_histograms(self, title = 'default', cmap = None):
         for i, img in enumerate(self.images):
+            ImagePlotter(img).plot_image_with_histogram(title=f'{title} {i}', cmap=cmap)
             
-            type = self.get_image_type(img)
-            
-            if type == 'L':
-                axes[i, 0].imshow(img, cmap='gray')
-            if type == 'RGB':
-                axes[i, 0].imshow(img)
-            if type == 'HSV':    
-                axes[i, 0].imshow(img, cmap='hsv')    
-            # Plot image
-            
-            axes[i, 0].set_xticks([])
-            axes[i, 0].set_yticks([])
-            
-            if titles == None:
-                axes[i, 0].set_title("Image {}".format(i+1))
-            else:
-                axes[i, 0].set_title("{}".format(titles[i]))
-
-            # Plot histogram
-            hist, bins = np.histogram(img.ravel(), bins=256, range=(0, 256))
-            axes[i, 1].plot(bins[:-1], hist, lw=2)
-            axes[i, 1].set_xlim([0, 256])
-            axes[i, 1].set_ylim([0, np.max(hist)+100])
-            axes[i, 1].set_title("Histogram")
-        
-            # Calculate the midpoint value, mean, and variance of the histogram
-            midpoint = (np.argmax(hist) + 1) / 2
-            mean = np.mean(img)
-            variance = np.var(img)
-
-            # Add the midpoint value, mean, and variance to the plot
-            axes[i, 1].axvline(x=midpoint, color='r', linestyle='--',
-                            label=f"Midpoint: {midpoint:.2f}")
-            axes[i, 1].axvline(x=mean, color='g', linestyle='--', label=f"Mean: {mean:.2f}")
-            axes[i, 1].axvline(x=mean-np.sqrt(variance), color='b',
-                            linestyle='--', label=f"Variance: {variance:.2f}")
-            axes[i, 1].axvline(x=mean+np.sqrt(variance), color='b', linestyle='--')
-            axes[i, 1].legend()
-
-        plt.show()
-        
-    def plot_images_and_noise_with_histograms(self, images, noises, titles=None):
-        """
-        Plots an array of images vertically with histograms for each image.
-        """
-        
-        fig, axes = plt.subplots(
-            nrows=len(images), ncols=3, figsize=(8, 3*len(images)))
-        plt.subplots_adjust(hspace=0.3)
-
-        for i, img in enumerate(images):
-            # Plot image
-            type = self.get_image_type(img)
-
-            if type == 'Grayscale':
-                axes[i, 0].imshow(img, cmap='gray')
-            if type == 'RGB':
-                axes[i, 0].imshow(img)
-            if type == 'HSV':
-                axes[i, 0].imshow(img, cmap='hsv')
-            axes[i, 0].set_xticks([])
-            axes[i, 0].set_yticks([])
-            if titles == None:
-                axes[i, 0].set_title("Image {}".format(i+1))
-            else:
-                axes[i, 0].set_title("{}".format(titles[i]))
-            
-            # Plot Noise    
-            axes[i, 1].imshow(noises[i], cmap='gray')
-            axes[i, 1].set_xticks([])
-            axes[i, 1].set_yticks([])
-            if titles == None:
-                axes[i, 1].set_title("Noise {}".format(i+1))
-            else:
-                axes[i, 1].set_title("{} Noise".format(titles[i]))
-
-            # Plot histogram
-            hist, bins = np.histogram(img.ravel(), bins=256, range=(0, 256))
-            axes[i, 2].plot(bins[:-1], hist, lw=2)
-            axes[i, 2].set_xlim([0, 256])
-            axes[i, 2].set_ylim([0, np.max(hist)+100])
-            if titles == None:
-                axes[i, 2].set_title("Histogram {}".format(i+1))
-            else:
-                axes[i, 2].set_title("{}".format(titles[i]))
-                
-            # Calculate the midpoint value, mean, and variance of the histogram
-            midpoint = (np.argmax(hist) + 1) / 2
-            mean = np.mean(img)
-            variance = np.var(img)
-
-            # Add the midpoint value, mean, and variance to the plot
-            axes[i, 2].axvline(x=midpoint, color='r', linestyle='--',
-                            label=f"Midpoint: {midpoint:.2f}")
-            axes[i, 2].axvline(x=mean, color='g', linestyle='--',
-                            label=f"Mean: {mean:.2f}")
-            axes[i, 2].axvline(x=mean-np.sqrt(variance), color='b',
-                            linestyle='--', label=f"Variance: {variance:.2f}")
-            axes[i, 2].axvline(x=mean+np.sqrt(variance), color='b', linestyle='--')
-            axes[i, 2].legend()
-            
-        plt.show()
 
 class Tilation(ImageUtil):
     #Takes Pillow Objects

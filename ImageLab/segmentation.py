@@ -1,63 +1,58 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import imageutils
-from colorspace import ColorSpace
+from PIL import Image
+
+from .imageutils import *
+from .colorspace import ColorSpace
 
 class Segment:
-    def __init__(self, img = None):
-        if img == None:
-            self.img = np.full((10, 10), 1)
-        else:
-            self.img = np.asarray(img)
+    def __init__(self, img=np.full((10, 10), 1), name='default'):
+        self.img = np.asarray(img).astype(int)
+        self.img_name = name
             
-    def segment_image(img):
+    def segment_image(self, distance=10, width=8):
         # Calculate the histogram of the image
-        hist, bins = np.histogram(img.flatten(), bins=256, range=(0, 255))
-
+        hist, bins = np.histogram(self.img.flatten(), bins=256, range=(0, 255))
+        
         # Find the peaks in the histogram using the find_peaks function from SciPy
         from scipy.signal import find_peaks
         
-        # Set minimum peak height to 1/10 the maximum height of the image
-        peaks, _ = find_peaks(hist, height=np.max(hist) // 10)
-
+        # Find peaks with a minimum height of 1/4 of the maximum value
+        minima, _ = find_peaks(-hist, distance=distance, width=width)
+        
         # Find the ranges of pixel values corresponding to halfway between each peak
         ranges = []
-        for i in range(len(peaks)):
+        for i in range(len(minima)):
             if i == 0:
                 start = 0
             else:
-                start = (peaks[i-1] + peaks[i]) // 2
+                start = minima[i]
             
             # If not the last peak, the next center is halfway between the two peaks, else it continues till the end.
-            end = (peaks[i] + peaks[i+1]) // 2 if i < len(peaks) - 1 else 255
+            end = minima[i+1] // 2 if i < len(minima) - 1 else 255
             ranges.append((start, end))
 
         # Create a binary mask for each range of pixel values
         masks = []
         for r in ranges:
             # Values within the range arr assigned 255, the rest 0
-            mask = np.zeros_like(img)
-            mask[(img >= r[0]) & (img <= r[1])] = 255
+            mask = np.zeros_like(self.img)
+            mask[(self.img >= r[0]) & (self.img <= r[1])] = 255
             masks.append(mask)
 
         # Show the original image and its histogram
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-        ax1.imshow(img, cmap='gray')
-        ax1.set_title('Original Image')
-        ax2.bar(bins[:-1], hist, width=1)
-        ax2.set_title('Histogram') 
-        plt.show()
+        ImagePlotter(self.img).plot_image_with_histogram(title=f'{self.img_name}')
 
         # Show the identified objects
-        ImageUtil.MultiPlotter(masks).plot_images_with_histograms(masks)
+        for i in range(len(masks)):
+            ImagePlotter(masks[i]).plot_image_with_histogram(
+                title=f'mask {ranges[i][0]}:{ranges[i][1]}')
         
-
         return masks
 
 
-
-    def global_threshold(image, mode = 'mean', deltaT = 3):
+    def global_threshold(self, mode = 'mean', deltaT = 3):
         """
         Applies global thresholding to an input grayscale image.
         
@@ -65,14 +60,13 @@ class Segment:
         :param threshold: The threshold value.
         :return: The thresholded image as a binary NumPy array.
         """
-        image = image.astype(int)
+        image = self.img.astype(int)
         threshold = None
         
         if mode == 'mean':
             threshold = (np.max(image)+np.min(image))//2
         elif mode == 'median':
             threshold = np.median(image)
-            
         # Minimizes the intra-class variance of the two resulting classes (foreground and background)
         elif mode == 'otsu':
             _, output = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -88,13 +82,15 @@ class Segment:
                 done = True
             threshold = thresholdnext
         
-        
         # Create a binary mask by comparing the image with the threshold value
         mask = np.zeros_like(image)
         mask[image >= threshold] = 1
 
         # Multiply the mask by 255 to obtain a binary image with 0s and 255s
         output = mask * 255
+        
+        # Clip the output image to ensure that pixel values are within [0, 255]
+        output = np.clip(output, 0, 255).astype(np.uint8)
 
         return output
 

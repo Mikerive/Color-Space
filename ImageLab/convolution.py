@@ -1,6 +1,5 @@
 import numpy as np
-from imageutils import ImageUtil
-import inspect
+from .imageutils import ImageUtil
 
 class Convolution:
     def __init__(self, img, img_name):
@@ -41,15 +40,25 @@ class Convolution:
                     
         output_image = np.clip(output_image, 0, 255).astype(np.uint8)
         
-        path = ImageUtil(output_image).save_image_to_folder('Image/Convolution/', f"{self.img_name}.png")
-        
-        return output_image, path
+        if output_image.shape[2] == 1:
+            output_image = np.squeeze(output_image)
+            path = ImageUtil(output_image).save_image_to_folder(
+                'Image/Convolution/', f"{self.img_name}.png")
+            return output_image, path
+        else:
+            path = ImageUtil(output_image).save_image_to_folder('Image/Convolution/', f"{self.img_name}.png")
+            return output_image, path
+
 
 # Convenience class to import many functions with one call
+
+
 class Conv_Functions:
+    default_matrix = np.full((3, 3), 1)
     def __init__(self):
         pass
-    def weighted_arithmetic_mean(arr, weight_matrix = [[1, 1, 1],[1, 1, 1],[1, 1, 1]]):
+
+    def weighted_arithmetic_mean(self, arr, weight_matrix=default_matrix):
         
         # Normalize the weight matrix
         weight_matrix = np.array(weight_matrix) / np.sum(weight_matrix)
@@ -57,9 +66,9 @@ class Conv_Functions:
         # Compute the weighted sum of the neighborhood values
         weighted_sum = np.sum(arr * weight_matrix)
         
-        return np.uint8(weighted_sum)
+        return weighted_sum
 
-    def weighted_geometric_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
+    def weighted_geometric_mean(self, arr, weight_matrix=default_matrix):
         # Normalize the weight matrix
         weight_matrix = np.array(weight_matrix) / np.sum(weight_matrix)
 
@@ -69,9 +78,9 @@ class Conv_Functions:
         # Compute the weighted geometric mean
         weighted_geometric_mean = np.power(weighted_product, 1.0 / np.sum(weight_matrix))
 
-        return np.uint8(weighted_geometric_mean)
+        return weighted_geometric_mean
 
-    def weighted_median(arr, weight_matrix = [[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
+    def weighted_median(self, arr, weight_matrix = default_matrix):
         
         # Create a flat version of the input array
         flat_arr = arr.flatten()
@@ -85,18 +94,18 @@ class Conv_Functions:
         # Sort the repeated pixels
         sorted_pixels = np.sort(repeated_pixels)
                 
-        return np.uint8(np.median(sorted_pixels))
+        return np.median(sorted_pixels)
 
-    def max(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
-        return np.uint8(np.max(arr))
+    def max(self, arr, weight_matrix=default_matrix):
+        return np.max(arr)
 
-    def min(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
-        return np.uint8(np.min(arr))
+    def min(self, arr, weight_matrix=default_matrix):
+        return np.min(arr)
 
-    def midpoint(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]]):
-        return np.uint8((np.max(arr) + np.min(arr))/2)
+    def midpoint(self, arr, weight_matrix=default_matrix):
+        return (np.max(arr) + np.min(arr))/2
 
-    def wieghted_alpha_trim_mean(arr, weight_matrix=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], alpha=0.3):
+    def weighted_alpha_trim_mean(self, arr, weight_matrix=default_matrix, alpha=0.3):
         # Shave an alpha ratio of the sorted pixels from the left most and right most indexes and return the average of the remaining indexes
         # Alpha 0.5 = median, Alpha 0 = mean
         
@@ -116,4 +125,4 @@ class Conv_Functions:
         left_index = int(alpha * len(sorted_pixels))
         right_index = int((1 - alpha) * len(sorted_pixels))
 
-        return np.uint8(np.mean(sorted_pixels[left_index:right_index]))
+        return np.mean(sorted_pixels[left_index:right_index])
