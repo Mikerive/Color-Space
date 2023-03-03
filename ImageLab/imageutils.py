@@ -252,6 +252,23 @@ class ImagePlotter(ImageUtil):
 
         # Display the image and histogram
         plt.show()
+        
+    def plot_image(self, title):
+
+        # Create a new figure with two subplots: one for the image and one for the histogram
+        fig, ax1 = plt.subplots(1, 1, figsize=(10, 5))
+
+        img_type = ImageUtil(self.img).get_image_type()
+
+        if img_type == 'Grayscale':
+            ax1.imshow(self.img, cmap='gray')
+        if img_type == 'RGB':
+            ax1.imshow(self.img)
+        if img_type == 'HSV':
+            ax1.imshow(self.img, cmap='hsv')
+
+        ax1.set_title(title)
+
     
 class MultiPlotter(ImageUtil):
     #Takes Pillow Objects
@@ -265,10 +282,11 @@ class MultiPlotter(ImageUtil):
 
 class Tilation(ImageUtil):
     #Takes Pillow Objects
-    def __init__(self, img=np.full((5, 5), 1), name='default'):
+    def __init__(self, img=np.full((5, 5), 1), name='default', hist = True):
         self.img = img
         self.section_dict = None
         self.image_name = name
+        self.hist = hist
         
 
     def split_image_nxn_sections(self, sections):
@@ -334,7 +352,11 @@ class Tilation(ImageUtil):
                         col:col + section_dict['section_width'], :] = section
                 index += 1
                 
-        ImagePlotter(result_img).plot_image_with_histogram(title=f'{self.image_name}')
+        if self.hist == True:
+            ImagePlotter(result_img).plot_image_with_histogram(title=f'{self.image_name}')
+        else:
+            ImagePlotter(result_img).plot_image(
+                title=f'{self.image_name}')
         return result_img
 
     def func_pass(x): return x
