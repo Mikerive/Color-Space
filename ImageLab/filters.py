@@ -1,7 +1,7 @@
 import numpy as np
 from skimage.transform import resize
 
-from .convolution import Convolution, Conv_Functions
+from .convolution import Convolution
 from .noisegenerators import NoiseOverlay
 from .imageutils import *
 

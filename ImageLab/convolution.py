@@ -1,72 +1,95 @@
 import numpy as np
-from .imageutils import ImageUtil
+from .imageutils import ImageUtil, ImagePlotter
+from multiprocessing import Pool
+from functools import partial
 
 class Convolution:
-    def __init__(self, img, img_name):
+    def __init__(self, img=np.full((1, 1), 1), img_name='default', hist=False):
+         
         self.img = np.asarray(img)
+            
         self.img_name = img_name
         
-    def convolve(self, weight_matrix, convfunction, layers = [0,1,2]):
-        
+        self.hist = hist
         # If 2d, make 3d
         if (self.img.ndim == 2):
-            layers = [0]
             self.img = np.expand_dims(self.img, axis=2)
             
-        # Get the dimensions of the image and the weight matrix
-        image_height, image_width, depth = self.img.shape
-        weight_height, weight_width = weight_matrix.shape
+    default_matrix = np.full((3, 3), 1)
+    def kernel_operation(self, pixel, img, kernel_matrix, kernel_radius, func, *args):
+        
+        row, col, channel = pixel
+        
+        # Extract the sub_image centered at the specified pixel
+        sub_image = img[row-kernel_radius:row + kernel_radius+1, col-kernel_radius:col+kernel_radius+1, channel]
 
+        # Apply the parameter function to the sub_image
+        return func(sub_image, kernel_matrix, *args)
+
+            
+    def sliding_kernel(self, kernel_matrix, func, *args, num_processes=4):
+        # If 2d, make 3d
+        if (self.img.ndim == 2):
+            self.img = np.expand_dims(self.img, axis=2)
+        
+        img = np.array(np.copy(self.img))
+        
+        k_matrix = np.array(kernel_matrix)
+        
+        kernel_size = k_matrix.shape[0]
+        
+        padding_size = kernel_size // 2
+        
+        # Get the coordinates of the center pixel in the kernel matrix
+        radius = np.array(k_matrix.shape[0]) // 2
+        
         # Pad the image with zeros
-        padding_size = int((weight_height - 1) / 2)
-        padded_image = np.pad(self.img, ((padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant')
+        padded_image = np.pad(img, ((padding_size, padding_size),
+                              (padding_size, padding_size), (0, 0)), mode='constant')
 
-        # Initialize the output image
-        output_image = np.zeros_like(self.img)
+        x_coords, y_coords, z_coords = np.meshgrid(
+            range(padding_size, img.shape[1]+padding_size), range(padding_size, img.shape[0]+padding_size), range(img.shape[2]), indexing='ij')
+
+        pixel_coords = np.column_stack((np.array(y_coords).ravel(), np.array(
+            x_coords).ravel(), np.array(z_coords).ravel()))
         
-        # For each specified layer
-        for layer in layers:
-            # Iterate over each pixel in the image
-            for i in range(padding_size, image_height + padding_size):
-                for j in range(padding_size, image_width + padding_size):
-                    # Extract the neighborhood around the current pixel
-                    neighborhood = padded_image[i - padding_size:i + padding_size + 1, j - padding_size:j + padding_size + 1, layer]
-
-                    # Apply the weight matrix to the neighborhood
-                    convolved_pixel = convfunction(neighborhood, weight_matrix)
-
-                    # Set the output pixel to the convolved value
-                    output_image[i - padding_size, j - padding_size, layer] = convolved_pixel
-                    
+        with Pool(num_processes) as p:
+            results = p.map(partial(self.kernel_operation, kernel_radius = radius, img=padded_image, kernel_matrix=k_matrix, func=func, *args), pixel_coords)
+        
+        print(np.array(results).shape)
+        # Convert the results iterator to an array and reshape it to the desired shape
+        output_image = np.fromiter(results, dtype=np.float32).reshape(self.img.shape)
         output_image = np.clip(output_image, 0, 255).astype(np.uint8)
-        
+
+        if self.hist == True:
+            ImagePlotter(output_image).plot_image_with_histogram(
+                title=f'{self.img_name}_n={kernel_size}')
+        else:
+            ImagePlotter(output_image).plot_image(
+                title=f'{self.img_name}_n={kernel_size}')
+
         if output_image.shape[2] == 1:
             output_image = np.squeeze(output_image)
             path = ImageUtil(output_image).save_image_to_folder(
                 'Image/Convolution/', f"{self.img_name}.png")
             return output_image, path
         else:
-            path = ImageUtil(output_image).save_image_to_folder('Image/Convolution/', f"{self.img_name}.png")
+            path = ImageUtil(output_image).save_image_to_folder(
+                'Image/Convolution/', f"{self.img_name}.png")
             return output_image, path
+        
+        
 
-
-# Convenience class to import many functions with one call
-
-
-class Conv_Functions:
-    default_matrix = np.full((3, 3), 1)
-    def __init__(self):
-        pass
+    def gaussian_kernel(n, sigma):
+        x, y = np.meshgrid(np.arange(-n // 2 + 1, n // 2 + 1), np.arange(-n // 2 + 1, n // 2 + 1))
+        g = np.exp(-(x**2 + y**2) / (2 * sigma**2))
+        return g // g.sum()
 
     def weighted_arithmetic_mean(self, arr, weight_matrix=default_matrix):
-        
         # Normalize the weight matrix
         weight_matrix = np.array(weight_matrix) / np.sum(weight_matrix)
-
-        # Compute the weighted sum of the neighborhood values
-        weighted_sum = np.sum(arr * weight_matrix)
         
-        return weighted_sum
+        return np.dot(np.array(arr).ravel(), np.array(weight_matrix).ravel())
 
     def weighted_geometric_mean(self, arr, weight_matrix=default_matrix):
         # Normalize the weight matrix

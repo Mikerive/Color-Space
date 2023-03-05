@@ -14,7 +14,6 @@ class Segment:
         
         # If 2d, make 3d
         if (self.img.ndim == 2):
-            layers = [0]
             self.img = np.expand_dims(self.img, axis=2)
             
     def segment_image(self, distance=10, width=8):
@@ -117,51 +116,32 @@ class Segment:
         col_min = max(0, col - window_size // 2)
         col_max = min(width, col + window_size // 2 + 1)
         
-        window = {
-            'img_window': img[row_min:row_max, col_min:col_max],
-            }
-        return window
-    
-    def Niblack(self, window, k = -0.2):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window['img_window'], axis=(0, 1))
-        stds = np.std(window['img_window'], axis=(0, 1))
-        
-        thresholds = means + k * stds
-        
-        return thresholds
-    
-    def Sauvola(self, window, k = 0.34, R=128):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window['img_window'], axis=(0, 1))
-        stds = np.std(window['img_window'], axis=(0, 1))
-
-        # Compute the local threshold for each channel
-        thresholds = means * (1.0 + k * (-1 + stds / R))
-        
-        return thresholds
-    
-    def Bernsen(self, window):
-        # Compute the mean and standard deviation for each channel separately
-        maxs = np.max(window['img_window'], axis=(0, 1))
-        mins = np.min(window['img_window'], axis=(0, 1))
-        
-        thresholds = (maxs + mins)/2
-        
-        return thresholds
+        return img[row_min:row_max, col_min:col_max]
     
     
     def Pixel_Filter(self, window_size, function, *args):
         
         # When iterating through an image, we need to know the windows.
         rows, cols, layers = self.img.shape
-        # Get an array of windows around each pixel
-        windows = np.array([self.get_window(self.img, row, col, window_size) for row, col in np.nditer([rows, cols])])
+        
+        # No need to reference outside the function
+        window = self.get_window
+        
+        # Calculate the padding size based on the window size
+        padding_size = window_size // 2
+
+        # Pad the image with zeros
+        padded_image = np.pad(self.img, ((padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant')
+        
+        windows = np.array([self.get_window(padded_image, row + padding_size, col + padding_size, window_size) for row, col in np.nditer([rows, cols])])
         
         thresholds = np.array([])
         
+        # No need to reference outside the function
+        func = function
+        
         for window in windows:
-            thresholds = function(window, *args)
+            thresholds = func(window, *args)
         
         mask = np.zeros_like(self.img)
         for layer in range(layers):
@@ -177,6 +157,34 @@ class Segment:
                 title=f'{self.img_name}')
 
         return mask
+    
+    def Niblack(self, window, k=-0.2):
+        # Compute the mean and standard deviation for each channel separately
+        means = np.mean(window['img_window'], axis=(0, 1))
+        stds = np.std(window['img_window'], axis=(0, 1))
+
+        thresholds = means + k * stds
+
+        return thresholds
+
+    def Sauvola(self, window, k=0.34, R=128):
+        # Compute the mean and standard deviation for each channel separately
+        means = np.mean(window['img_window'], axis=(0, 1))
+        stds = np.std(window['img_window'], axis=(0, 1))
+
+        # Compute the local threshold for each channel
+        thresholds = means * (1.0 + k * (-1 + stds / R))
+
+        return thresholds
+
+    def Bernsen(self, window):
+        # Compute the mean and standard deviation for each channel separately
+        maxs = np.max(window['img_window'], axis=(0, 1))
+        mins = np.min(window['img_window'], axis=(0, 1))
+
+        thresholds = (maxs + mins)/2
+
+        return thresholds
     
     def global_multiple_threshold(self, minima):
 
