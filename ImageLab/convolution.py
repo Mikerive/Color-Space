@@ -23,29 +23,19 @@ class Convolution:
             self.img = np.expand_dims(self.img, axis=2)
             
     default_matrix = np.full((3, 3), 1)
-    
-    
-    # @staticmethod
-    # def get_window(padded_img, col, row, channel, window_size):
-    #     # When iterating through an image, we need to know the windows.
-    #     height, width, _ = padded_img.shape
 
-    #     row_min = max(0, row - window_size // 2)
-    #     row_max = min(height, row + window_size // 2 + 1)
-    #     col_min = max(0, col - window_size // 2)
-    #     col_max = min(width, col + window_size // 2 + 1)
-    #     return padded_img[row_min:row_max, col_min:col_max, channel]
-    
-    
-    # @staticmethod
-    # def kernel_operation(sub_image, params):
-    #     func = params['func']
-    #     kernel_matrix = params['kernel_matrix']
-    #     args = params['args']
-        
-    #     # Apply the parameter function to the sub_image
-    #     # Apply the value to the image
-    #     return func(sub_image,kernel_matrix, *args)
+    @staticmethod
+    def kernel_operation(index, params):
+        padded_img = params['img_padded']
+        padding_size = params['padding_size']
+        func = params['func']
+        kernel_matrix = params['kernel_matrix']
+        args = params['args']
+
+        row, col, channel = index
+        # Apply the parameter function to the sub_image
+        # Apply the value to the image
+        return func(padded_img[row+padding_size, col+padding_size, channel], kernel_matrix, *args)
         
     def sliding_kernel(self, kernel_matrix, func, *args, num_processes=2):
         
@@ -54,13 +44,11 @@ class Convolution:
             self.img = np.expand_dims(self.img, axis=2)
         
         k_matrix = np.array(kernel_matrix).astype(np.float64)
-        
         img = np.array(np.copy(self.img))
         
         print(img.shape)
         
         kernel_size = k_matrix.shape[0]
-        
         padding_size = kernel_size // 2
         
         # Get the coordinates of the center pixel in the kernel matrix
@@ -74,17 +62,8 @@ class Convolution:
             k_matrix_norm = np.array(k_matrix) / np.sum(k_matrix)
         
         
-        # # Define the kernel operation parameters
-        # kernel_operation = Convolution().kernel_operation
-        # kernel_func = partial(
-        #     kernel_operation,
-        #     params={
-        #         'img_padded': padded_image,
-        #         'kernel_matrix': k_matrix_norm,
-        #         'func': func,
-        #         'args': args
-        #     }
-        # )
+        
+        # working
         print('1')
         output = np.zeros_like(img)
         output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], k_matrix_norm, *args)
@@ -93,15 +72,26 @@ class Convolution:
                                             for channel in range(img.shape[2])]
         print('2')
         
+        # # Define the kernel operation parameters
+        # kernel_operation = Convolution().kernel_operation
+        # kernel_func = partial(
+        #     kernel_operation,
+        #     params={
+        #         'img_padded': padded_image,
+        #         'padding_size': padding_size,
+        #         'kernel_matrix': k_matrix_norm,
+        #         'func': func,
+        #         'args': args
+        #     }
+        # )
+
+        # output = np.zeros_like(img)
+        # index_tuples = [(row, col, channel) for (row, col, channel) in np.ndindex(img.shape)]
+        # with Pool(processes=num_processes) as pool:
+        #     async_results = pool.map_async(kernel_func, index_tuples)
+        # output = np.array(list(async_results.get())).reshape(img.shape)
+            
         # print(output.shape)
-        
-        # output = map(
-        #     lambda x: list(map(
-        #         lambda y: list(map(
-        #             lambda z: kernel_func(img[padding_size:x + padding_size, y:y+padding_size, z]), x, y, z),
-        #         y)),
-        #     x)),
-        # img)
         
         print('1: ', np.array(output).shape)
         
