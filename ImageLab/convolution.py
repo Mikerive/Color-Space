@@ -2,11 +2,18 @@ import numpy as np
 from .imageutils import ImageUtil, ImagePlotter
 from multiprocessing import Pool
 from functools import partial
+from numba import jit
+import cv2
+import matplotlib.pyplot as plt
+from .qualitymeasures import QualityMeasures
+
+counter = 0
 
 class Convolution:
     def __init__(self, img=np.full((1, 1), 1), img_name='default', hist=False):
          
-        self.img = np.asarray(img)
+        self.img = np.array(img)
+        self.list_img = img
             
         self.img_name = img_name
         
@@ -16,80 +23,129 @@ class Convolution:
             self.img = np.expand_dims(self.img, axis=2)
             
     default_matrix = np.full((3, 3), 1)
-    def kernel_operation(self, pixel, img, kernel_matrix, kernel_radius, func, *args):
-        
-        row, col, channel = pixel
-        
-        # Extract the sub_image centered at the specified pixel
-        sub_image = img[row-kernel_radius:row + kernel_radius+1, col-kernel_radius:col+kernel_radius+1, channel]
+    
+    
+    # @staticmethod
+    # def get_window(padded_img, col, row, channel, window_size):
+    #     # When iterating through an image, we need to know the windows.
+    #     height, width, _ = padded_img.shape
 
-        # Apply the parameter function to the sub_image
-        return func(sub_image, kernel_matrix, *args)
-
-            
-    def sliding_kernel(self, kernel_matrix, func, *args, num_processes=4):
+    #     row_min = max(0, row - window_size // 2)
+    #     row_max = min(height, row + window_size // 2 + 1)
+    #     col_min = max(0, col - window_size // 2)
+    #     col_max = min(width, col + window_size // 2 + 1)
+    #     return padded_img[row_min:row_max, col_min:col_max, channel]
+    
+    
+    # @staticmethod
+    # def kernel_operation(sub_image, params):
+    #     func = params['func']
+    #     kernel_matrix = params['kernel_matrix']
+    #     args = params['args']
+        
+    #     # Apply the parameter function to the sub_image
+    #     # Apply the value to the image
+    #     return func(sub_image,kernel_matrix, *args)
+        
+    def sliding_kernel(self, kernel_matrix, func, *args, num_processes=2):
+        
         # If 2d, make 3d
         if (self.img.ndim == 2):
             self.img = np.expand_dims(self.img, axis=2)
         
+        k_matrix = np.array(kernel_matrix).astype(np.float64)
+        
         img = np.array(np.copy(self.img))
         
-        k_matrix = np.array(kernel_matrix)
+        print(img.shape)
         
         kernel_size = k_matrix.shape[0]
         
         padding_size = kernel_size // 2
         
         # Get the coordinates of the center pixel in the kernel matrix
-        radius = np.array(k_matrix.shape[0]) // 2
         
         # Pad the image with zeros
-        padded_image = np.pad(img, ((padding_size, padding_size),
-                              (padding_size, padding_size), (0, 0)), mode='constant')
-
-        x_coords, y_coords, z_coords = np.meshgrid(
-            range(padding_size, img.shape[1]+padding_size), range(padding_size, img.shape[0]+padding_size), range(img.shape[2]), indexing='ij')
-
-        pixel_coords = np.column_stack((np.array(y_coords).ravel(), np.array(
-            x_coords).ravel(), np.array(z_coords).ravel()))
+        padded_image = np.array(np.pad(img, ((padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant'))
         
-        with Pool(num_processes) as p:
-            results = p.map(partial(self.kernel_operation, kernel_radius = radius, img=padded_image, kernel_matrix=k_matrix, func=func, *args), pixel_coords)
+        if np.sum(k_matrix) == 0:
+            k_matrix_norm = k_matrix
+        else:
+            k_matrix_norm = np.array(k_matrix) / np.sum(k_matrix)
         
-        print(np.array(results).shape)
-        # Convert the results iterator to an array and reshape it to the desired shape
-        output_image = np.fromiter(results, dtype=np.float32).reshape(self.img.shape)
-        output_image = np.clip(output_image, 0, 255).astype(np.uint8)
-
+        
+        # # Define the kernel operation parameters
+        # kernel_operation = Convolution().kernel_operation
+        # kernel_func = partial(
+        #     kernel_operation,
+        #     params={
+        #         'img_padded': padded_image,
+        #         'kernel_matrix': k_matrix_norm,
+        #         'func': func,
+        #         'args': args
+        #     }
+        # )
+        print('1')
+        output = np.zeros_like(img)
+        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], k_matrix_norm, *args)
+                                            for row in range(padding_size, padded_image.shape[0] - padding_size)
+                                            for col in range(padding_size, padded_image.shape[1] - padding_size)
+                                            for channel in range(img.shape[2])]
+        print('2')
+        
+        # print(output.shape)
+        
+        # output = map(
+        #     lambda x: list(map(
+        #         lambda y: list(map(
+        #             lambda z: kernel_func(img[padding_size:x + padding_size, y:y+padding_size, z]), x, y, z),
+        #         y)),
+        #     x)),
+        # img)
+        
+        print('1: ', np.array(output).shape)
+        
+        output = np.array(output).reshape(img.shape)
+        
+        print('2: ', output.shape)
+        
+        print(QualityMeasures(self.img).histogram_distance_euclidian(output))
+        
+        plt.imshow(output)
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
         if self.hist == True:
-            ImagePlotter(output_image).plot_image_with_histogram(
+            ImagePlotter(output).plot_image_with_histogram(
                 title=f'{self.img_name}_n={kernel_size}')
         else:
-            ImagePlotter(output_image).plot_image(
+            ImagePlotter(output).plot_image(
                 title=f'{self.img_name}_n={kernel_size}')
 
-        if output_image.shape[2] == 1:
-            output_image = np.squeeze(output_image)
-            path = ImageUtil(output_image).save_image_to_folder(
+        if img.shape[2] == 1:
+            output = np.squeeze(output)
+            path = ImageUtil(output).save_image_to_folder(
                 'Image/Convolution/', f"{self.img_name}.png")
-            return output_image, path
+            return output, path
         else:
-            path = ImageUtil(output_image).save_image_to_folder(
+            path = ImageUtil(output).save_image_to_folder(
                 'Image/Convolution/', f"{self.img_name}.png")
-            return output_image, path
+            return output, path
+
+    @staticmethod
+    @jit(nopython=False)
+    def weighted_arithmetic_mean(sub_image, weight_matrix=default_matrix):
+        # print('sub_image', np.array(sub_image).shape)
+        # print('weight_matrix', weight_matrix.shape)
         
-        
+        product = np.multiply(sub_image, weight_matrix)
+
+        return np.array(np.sum(product) / (product.shape[0] * product.shape[1]))
 
     def gaussian_kernel(n, sigma):
         x, y = np.meshgrid(np.arange(-n // 2 + 1, n // 2 + 1), np.arange(-n // 2 + 1, n // 2 + 1))
         g = np.exp(-(x**2 + y**2) / (2 * sigma**2))
-        return g // g.sum()
-
-    def weighted_arithmetic_mean(self, arr, weight_matrix=default_matrix):
-        # Normalize the weight matrix
-        weight_matrix = np.array(weight_matrix) / np.sum(weight_matrix)
-        
-        return np.dot(np.array(arr).ravel(), np.array(weight_matrix).ravel())
+        return g
 
     def weighted_geometric_mean(self, arr, weight_matrix=default_matrix):
         # Normalize the weight matrix

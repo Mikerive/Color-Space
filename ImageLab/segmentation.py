@@ -116,7 +116,7 @@ class Segment:
         col_min = max(0, col - window_size // 2)
         col_max = min(width, col + window_size // 2 + 1)
         
-        return img[row_min:row_max, col_min:col_max]
+        return img[row_min:row_max, col_min:col_max, :]
     
     
     def Pixel_Filter(self, window_size, function, *args):
@@ -140,8 +140,7 @@ class Segment:
         # No need to reference outside the function
         func = function
         
-        for window in windows:
-            thresholds = func(window, *args)
+        thresholds = [func(window, *args) for window in windows]
         
         mask = np.zeros_like(self.img)
         for layer in range(layers):
@@ -158,10 +157,10 @@ class Segment:
 
         return mask
     
-    def Niblack(self, window, k=-0.2):
+    def Niblack(window, k=-0.2):
         # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window['img_window'], axis=(0, 1))
-        stds = np.std(window['img_window'], axis=(0, 1))
+        means = np.mean(window, axis=(0, 1))
+        stds = np.std(window, axis=(0, 1))
 
         thresholds = means + k * stds
 
@@ -169,8 +168,8 @@ class Segment:
 
     def Sauvola(self, window, k=0.34, R=128):
         # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window['img_window'], axis=(0, 1))
-        stds = np.std(window['img_window'], axis=(0, 1))
+        means = np.mean(window, axis=(0, 1))
+        stds = np.std(window, axis=(0, 1))
 
         # Compute the local threshold for each channel
         thresholds = means * (1.0 + k * (-1 + stds / R))
