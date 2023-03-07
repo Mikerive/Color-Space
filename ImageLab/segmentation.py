@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from .imageutils import *
+
 from .colorspace import ColorSpace
 
 class Segment:
