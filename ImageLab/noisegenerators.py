@@ -13,7 +13,8 @@ class NoiseOverlay:
         # Clip noise and cast to int
         noise = np.clip(noise, 0, 255).astype(np.int)
         
-        ImagePlotter(noise).plot_image_with_histogram(title=f'Gaussian {mean} : {variance}')
+        ImagePlotter(noise).plot_image_with_histogram(
+            title=f'Gaussian {mean} : {variance}')
 
         return noise
 

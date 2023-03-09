@@ -64,7 +64,7 @@ class Filters:
     def histogram_equalization(self):
         
         # Convert the image to a numpy array
-        img = np.array(self.img).astype(np.int)
+        img = np.array(self.img).astype(np.int8)
         
         # Calculate the cdf
         hist, bins = np.histogram(img.flatten(), 256, [0, 256])

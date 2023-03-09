@@ -5,6 +5,7 @@ from PIL import Image
 
 
 from .colorspace import ColorSpace
+from .imageutils import ImagePlotter
 
 class Segment:
     def __init__(self, img=np.full((10, 10), 1), name='default', hist=False):
