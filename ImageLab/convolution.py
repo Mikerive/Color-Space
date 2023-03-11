@@ -2,107 +2,54 @@
 import numpy as np
 from .imageutils import ImageUtil, ImagePlotter
 from multiprocessing import Pool
-from functools import partial
 from numba import jit
-import numba as nb
 import cv2
 import matplotlib.pyplot as plt
-from .qualitymeasures import QualityMeasures
-from .imageutils import *
+import math
 
-counter = 0
+from PIL import Image
+import numpy as np
 
-class Convolution:
-    def __init__(self, img=np.full((1, 1), 1), folder_name = 'default', img_name='default', hist=False):
-         
-        self.img = np.array(img)
-        self.list_img = img
-            
-        self.img_name = img_name
-        self.folder_name = folder_name
-        
-        self.hist = hist
-        # If 2d, make 3d
-        if (self.img.ndim == 2):
-            self.img = np.expand_dims(self.img, axis=2)
-            
-    default_matrix = np.full((3, 3), 1)
+import inspect
 
-    # @staticmethod
-    # def kernel_operation(index, params):
-    #     padded_img = params['img_padded']
-    #     padding_size = params['padding_size']
-    #     func = params['func']
-    #     kernel_matrix = params['kernel_matrix']
-    #     args = params['args']
-
-    #     row, col, channel = index
-    #     # Apply the parameter function to the sub_image
-    #     # Apply the value to the image
-    #     return func(padded_img[row+padding_size, col+padding_size, channel], kernel_matrix, *args)
+class ImageProcessor:
+    def __init__(self, image_path):
+        self.image_path = image_path
     
-    # def threshold_kernel_operation(self, kernel_matrix, func, threshold = 5):
+    def process(self, operator, kernel_matrix, img_name, *kwargs):
+        # Open the input image
+        image = Image.open(self.image_path)
+        image_array = np.array(image)
         
-    #     # If 2d, make 3d
-    #     if (self.img.ndim == 2):
-    #         self.img = np.expand_dims(self.img, axis=2)
+        operator = Operator()
 
-    #     k_matrix = np.array(kernel_matrix).astype(np.float64)
-    #     img = np.array(np.copy(self.img))
+        # Apply the operator to the input image
+        output, class_name = operator.apply(image_array, kernel_matrix, *kwargs)
+
+        path = ImageUtil(output).save_image_to_folder(
+            f'Image/{class_name}/', f"{img_name}.png")
         
-    #     height, width, channels = np.array(img).shape
-            
-    #     # If kmatrix sum is 0, don't divide by zero
-    #     k_matrix_norm = np.where(np.sum(k_matrix) == 0, k_matrix, np.array(k_matrix) / np.sum(k_matrix))
+        return output, path
+
+class Operator:
+    pass
+
+class Convolution(Operator):
+    def __init__(self):
+        frame = inspect.currentframe()
+        self.class_name = frame.f_back.f_locals['self'].__class__.__name__
         
-    #     output_tensor = tenalg.multi_mode_dot(img, [k_matrix_norm]*channels, modes=[0, 1])
-
-    #     output_tensor = np.where(output_tensor > threshold, 255, 0)
-
-    #     output = np.squeeze(np.array(output_tensor).reshape(-1, width, channels)).astype(np.uint8)
-        
-    #     print('2: ', output.shape)
-
-    #     print(QualityMeasures(self.img).histogram_distance_euclidian(output))
-
-    #     plt.imshow(output)
-
-    #     output = np.clip(output, 0, 255).astype(np.uint8)
-
-    #     if self.hist == True:
-    #         ImagePlotter(output).plot_image_with_histogram(
-    #             title=f'{self.img_name}_n={k_matrix.shape[0]}')
-    #     else:
-    #         ImagePlotter(output).plot_image(
-    #             title=f'{self.img_name}_n={k_matrix.shape[0]}')
-
-    #     if img.shape[2] == 1:
-    #         output = np.squeeze(output)
-    #         path = ImageUtil(output).save_image_to_folder(
-    #             'Image/Threshold/', f"{self.img_name}.png")
-    #         return output, path
-    #     else:
-    #         path = ImageUtil(output).save_image_to_folder(
-    #             'Image/Threshold/', f"{self.img_name}.png")
-    #         return output, path
-
-        
-        
-    def convolution(self, kernel_matrix,**kwargs):
-        
+    def apply(self, img=np.full((1, 1), 1), kernel_matrix=np.full((3, 3), 1)):
         # If 2d, make 3d
-        if (self.img.ndim == 2):
-            self.img = np.expand_dims(self.img, axis=2)
-        
+        if (img.ndim == 2):
+            img = np.expand_dims(img, axis=2)
         
         k_matrix = np.array(kernel_matrix).astype(np.float64)
-        img = np.array(np.copy(self.img))
+        img = np.array(np.copy(img))
         
         # Get dimensions of the kernel.
         kernel_size = k_matrix.shape[0]
         padding_size = kernel_size // 2
-
-        # Get the coordinates of the center pixel in the kernel matrix
         
         # Pad the image with zeros
         padded_image = np.array(np.pad(img, ((padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant'))
@@ -112,74 +59,133 @@ class Convolution:
         else:
             k_matrix_norm = np.array(k_matrix) / np.sum(k_matrix)
 
-        # output = np.zeros_like(img)
-        # index_tuples = [(row, col, channel) for (row, col, channel) in np.ndindex(img.shape)]
-        # with Pool(processes=num_processes) as pool:
-        #     async_results = pool.map_async(kernel_func, index_tuples)
-        # output = np.array(list(async_results.get())).reshape(img.shape)
-            
-        # print(output.shape)
-        
-        # List Comprehension Based Approach
-        
-        # Define the default kernel operation parameters
-        # kernel_func = partial(func,
-        #                       #threshold=kwargs.get('threshold', 3),
-        #                       weight_matrix=k_matrix_norm
-        #                       )
-
-        # output = np.zeros_like(img)
-        # 
-        
         # @staticmethod
         @jit(nopython=True)
         def weighted_arithmetic_mean(sub_image, weight_matrix):
             product = np.multiply(sub_image, weight_matrix)
-            # mean = np.array(np.sum(product) / np.sum(weight_matrix))
             return np.sum(product)
-        
-        # output = np.zeros_like(img)
-        # for row in range(padding_size, padded_image.shape[0] - padding_size-1):
-        #     for col in range(padding_size, padded_image.shape[1] - padding_size-1):
-        #         for channel in range(0, img.shape[2]):
-        #             sub_img = padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel]
-        #             output[row,col,channel] = weighted_arithmetic_mean(sub_img, k_matrix_norm)
                     
         output = [weighted_arithmetic_mean(padded_image[row-padding_size:row+padding_size+1,
                                                         col-padding_size:col+padding_size+1, channel], k_matrix_norm)
                             for row in range(padding_size, padded_image.shape[0] - padding_size)
                             for col in range(padding_size, padded_image.shape[1] - padding_size)
                             for channel in range(0, img.shape[2])]
-                    
-            
         
         output = np.array(output).reshape(img.shape)
         
-        # print(QualityMeasures(self.img).histogram_distance_euclidian(output))
-        
         output = np.clip(output, 0, 255).astype(np.uint8)
         
-        if self.hist == True:
-            ImagePlotter(output).plot_image_with_histogram(
-                title=f'{self.img_name}_n={kernel_size}')
-        else:
-            ImagePlotter(output).plot_image(
-                title=f'{self.img_name}_n={kernel_size}')
-
-        if img.shape[2] == 1:
-            path = ImageUtil(output).save_image_to_folder(
-                f'Image/{self.folder_name}/', f"{self.img_name}.png")
-            return output, path
-        else:
-            path = ImageUtil(output).save_image_to_folder(
-                f'Image/{self.folder_name}/', f"{self.img_name}.png")
-            return output, path
-
+        ImagePlotter(output).plot_image(
+            title=f'{kernel_size}x{kernel_size}')
+        
+        return output, self.class_name
     
+class Dilation(Operator):
+    def __init__(self):
+        frame = inspect.currentframe()
+        self.class_name = frame.f_back.f_locals['self'].__class__.__name__
+
+    def apply(self, img=np.full((1, 1), 1), kernel_matrix=np.full((3, 3), 1)):
+        # If 2d, make 3d
+        if (img.ndim == 2):
+            img = np.expand_dims(img, axis=2)
+
+        k_matrix = np.array(kernel_matrix)
+        img = np.array(np.copy(img))
+
+        # Get dimensions of the kernel.
+        kernel_size = k_matrix.shape[0]
+        padding_size = kernel_size // 2
+
+        # Pad the image with zeros
+        padded_image = np.array(np.pad(img, ((
+            padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant', constant_values=0))
+
+        # @staticmethod
+        @jit(nopython=True)
+        def min(sub_image, weight_matrix):
+                # Create a flat version of the input array
+                flat_arr = sub_image.flatten()
+
+                # Create a flat version of the weight matrix
+                flat_weight_matrix = np.array(weight_matrix).flatten()
+                
+                nonzero_mask = flat_weight_matrix != 0
+                nonzero_pixels = flat_arr[nonzero_mask]
+                
+                return np.min(nonzero_pixels)
+
+
+        output = [min(padded_image[row-padding_size:row+padding_size+1,
+                                                        col-padding_size:col+padding_size+1, channel], k_matrix)
+                  for row in range(padding_size, padded_image.shape[0] - padding_size)
+                  for col in range(padding_size, padded_image.shape[1] - padding_size)
+                  for channel in range(0, img.shape[2])]
+
+        output = np.array(output).reshape(img.shape)
+
+        output = np.clip(output, 0, 255).astype(np.uint8)
+
+        ImagePlotter(output).plot_image(
+            title=f'{kernel_size}x{kernel_size}')
+
+        return output, self.class_name
+    
+class Erosion(Operator):
+    def __init__(self):
+        frame = inspect.currentframe()
+        self.class_name = frame.f_back.f_locals['self'].__class__.__name__
+
+    def apply(self, img=np.full((1, 1), 1), kernel_matrix=np.full((3, 3), 1)):
+        # If 2d, make 3d
+        if (img.ndim == 2):
+            img = np.expand_dims(img, axis=2)
+
+        k_matrix = np.array(kernel_matrix)
+        img = np.array(np.copy(img))
+
+        # Get dimensions of the kernel.
+        kernel_size = k_matrix.shape[0]
+        padding_size = kernel_size // 2
+
+        # Pad the image with zeros
+        padded_image = np.array(np.pad(img, ((
+            padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant', constant_values=255))
+
+        # @staticmethod
+        @jit(nopython=True)
+        def max(sub_image, weight_matrix):
+                # Create a flat version of the input array
+                flat_arr = sub_image.flatten()
+
+                # Create a flat version of the weight matrix
+                flat_weight_matrix = np.array(weight_matrix).flatten()
+                
+                nonzero_mask = flat_weight_matrix != 0
+                nonzero_pixels = flat_arr[nonzero_mask]
+                
+                return np.max(nonzero_pixels)
+
+
+        output = [min(padded_image[row-padding_size:row+padding_size+1,
+                                                        col-padding_size:col+padding_size+1, channel], k_matrix)
+                  for row in range(padding_size, padded_image.shape[0] - padding_size)
+                  for col in range(padding_size, padded_image.shape[1] - padding_size)
+                  for channel in range(0, img.shape[2])]
+
+        output = np.array(output).reshape(img.shape)
+
+        output = np.clip(output, 0, 255).astype(np.uint8)
+
+        ImagePlotter(output).plot_image(
+            title=f'{kernel_size}x{kernel_size}')
+
+        return output, self.class_name
+
     
     @staticmethod
     @jit(nopython=True)
-    def weighted_arithmetic_mean_threshold(self, sub_image, weight_matrix=default_matrix, threshold=3):
+    def weighted_arithmetic_mean_threshold(self, sub_image, weight_matrix=np.full((3, 3), 1), threshold=3):
 
         product = np.multiply(sub_image, weight_matrix)
         
@@ -359,6 +365,29 @@ class EdgeDetect:
         # Normalize the filter so that its values sum up to 0
         return LoG_filter / np.sum(LoG_filter)
     
+    def hough_transform(img_bin, theta_res=1, rho_res=1):
+        h, w = img_bin.shape
+        diag_len = int(np.ceil(np.sqrt(h*h + w*w)))
+        rhos = np.linspace(-diag_len, diag_len, diag_len * 2 / rho_res + 1)
+        thetas = np.arange(0, 180, theta_res)
+
+        cos_t = np.cos(np.deg2rad(thetas))
+        sin_t = np.sin(np.deg2rad(thetas))
+        num_thetas = len(thetas)
+
+        accumulator = np.zeros(
+            (int(2 * diag_len / rho_res), num_thetas), dtype=np.uint64)
+        y_idxs, x_idxs = np.nonzero(img_bin)
+
+        for i in range(len(x_idxs)):
+            x = x_idxs[i]
+            y = y_idxs[i]
+
+            for t_idx in range(num_thetas):
+                rho = int((x * cos_t[t_idx] + y * sin_t[t_idx]) + diag_len)
+                accumulator[rho, t_idx] += 1
+
+        return accumulator, thetas, rhos
 
 class Segment:
     def __init__(self, img=np.full((10, 10), 1), name='default', hist=False):
@@ -499,7 +528,7 @@ class Segment:
             func = Bernsen
         
         @jit(nopython=True)
-        def Niblack(self, window, row, col, channel, k=-0.2):
+        def Niblack(window, row, col, channel, k=-0.2):
             # Compute the mean and standard deviation for each channel separately
             means = np.mean(window)
             stds = np.std(window)
@@ -512,7 +541,7 @@ class Segment:
                 return 0
 
         @jit(nopython=True)
-        def Sauvola(self, window, row, col, channel, k=0.34, R=128):
+        def Sauvola(window, row, col, channel, k=0.34, R=128):
             # Compute the mean and standard deviation for each channel separately
             means = np.mean(window)
             stds = np.std(window)
@@ -526,7 +555,7 @@ class Segment:
                 return 0
 
         @jit(nopython=True)
-        def Bernsen(self, window, row, col, channel):
+        def Bernsen(window, row, col, channel):
             # Compute the mean and standard deviation for each channel separately
             maxs = np.max(window['img_window'])
             mins = np.min(window['img_window'])
@@ -554,8 +583,6 @@ class Segment:
 
         return output
     
-    
-
     def global_multiple_threshold(self, minima):
 
         # Find the ranges of pixel values corresponding to halfway between each peak
@@ -579,12 +606,12 @@ class Segment:
             masks.append(mask)
 
         # Show the original image and its histogram
-        ImagePlotter(self.img).plot_image_with_histogram(
+        ImagePlotter(self.img).plot_image(
             title=f'{self.img_name}')
 
         # Show the identified objects
         for i in range(len(masks)):
-            ImagePlotter(masks[i]).plot_image_with_histogram(
+            ImagePlotter(masks[i]).plot_image(
                 title=f'Map {ranges[i][0]}:{ranges[i][1]}')
 
         return masks
@@ -628,54 +655,127 @@ class Segment:
         return image
 
 
-
-# class LinearRegression:
-    # https://medium.com/analytics-vidhya/linear-regression-from-scratch-in-python-b6501f91c82d
-    # def __init__(self, lr=0.01, deltaW=0.1):
-    #     self.lr = lr
-    #     self.epochs = epochs
-    #     self.weights = None
-    #     self.bias = None
+class Tilation(ImageUtil):
+    # Takes Pillow Objects
+    def __init__(self, img=np.full((5, 5), 1), name='default', hist=True):
+        self.img = img
+        self.section_dict = None
+        self.image_name = name
+        self.hist = hist
         
-    # # Training function: fit
-    # def fit(self, X, y):
-    #     # shape of X: (number of training examples: m, number of
-    #     # features: n)
-    #     m, n = X.shape
+        # If 2d, make 3d
+        if (self.img.ndim == 2):
+            self.img = np.expand_dims(self.img, axis=2)
 
-    #     # Initializing weights as a matrix of zeros of size: (number
-    #     # of features: n, 1) and bias as 0
-    #     self.weights = np.zeros((n, 1))
-    #     self.bias = 0
+    def split_image_nxn_sections(self, sections):
 
-    #     # reshaping y as (m,1) in case your dataset initialized as
-    #     # (m,) which can cause problems
-    #     y = y.reshape(m, 1)
+        # Get the size of the image
+        height, width = self.img.shape[:2]
 
-    #     # empty lsit to store losses so we can plot them later
-    #     # against epochs
-    #     losses = []
+        layers = 0
 
-    #     # Gradient Descent loop/ Training loop
-    #     for epoch in range(self.epochs):
+        if len(self.img.shape) == 2:
+            layers = 1
+        else:
+            layers = self.img.shape[2]
 
-    #         # Calculating prediction: y_hat or h(x)
-    #         y_hat = np.dot(X, self.weights) + self.bias
+        # Calculate the height of each section
+        section_height = int(np.ceil(height / sections))
 
-    #         # Calculting loss
-    #         loss = np.mean((y_hat - y)**2)
+        # Calculate the width of each section
+        section_width = int(np.ceil(width / sections))
 
-    #         # Appending loss in list: losses
-    #         losses.append(loss)
+        # Initialize the list to store the sections
+        section_list = []
 
-    #         # Calculating derivatives of parameters(weights, and
-    #         # bias)
-    #         dw = (1/m)*np.dot(X.T, (y_hat - y))
-    #         db = (1/m)*np.sum((y_hat - y))
-    #         # Updating the parameters: parameter := parameter - lr*derivative
-    #         # of loss/cost w.r.t parameter)
-    #         self.weights -= self.lr*dw
-    #         self.bias -= self.lr*db
+        if layers == 1:
+            # Split the image into sections
+            for row in range(0, height, section_height):
+                for col in range(0, width, section_width):
+                    section = self.img[row:row + section_height,
+                                       col:col + section_width]
+                    section_list.append(section)
+        else:
+            # Split the image into sections
+            for row in range(0, height, section_height):
+                for col in range(0, width, section_width):
+                    section = self.img[row:row + section_height, col:col + section_width, :]
+                    section_list.append(section)
 
-    #     # returning the parameter so we can look at them later
-    #     return self.weights, self.bias, losses
+        # Return the output wrapped in a dictionary
+        section_dict = {
+            'section_height': section_height,
+            'section_width': section_width,
+            'height': height,
+            'width': width,
+        }
+        self.section_dict = section_dict
+        return section_list, section_dict
+
+    def merge_sections_into_image(self, section_list, section_dict):
+        # Get the number of channels from the first section
+        num_channels = section_list[0].shape[2]
+
+        # Initialize the result image with the correct number of channels
+        result_img = np.zeros(
+            (section_dict['height'], section_dict['width'], num_channels), dtype=np.uint8)
+
+        # Merge the sections into a single image
+        index = 0
+        for row in range(0, section_dict['height'], section_dict['section_height']):
+            for col in range(0, section_dict['width'], section_dict['section_width']):
+                section = section_dict['section_list'][index]
+                result_img[row:row + section_dict['section_height'],
+                           col:col + section_dict['section_width'], :] = section
+                index += 1
+
+        if self.hist == True:
+            ImagePlotter(result_img).plot_image_with_histogram(
+                title=f'{self.image_name}')
+        else:
+            ImagePlotter(result_img).plot_image(
+                title=f'{self.image_name}')
+        return result_img
+
+    def func_pass(x): return x
+
+    def apply_function_nxn_sections(self, func1=func_pass, func2=func_pass, func3=func_pass, *args):
+
+        L, A, B = cv2.split(self.section_dict['section_list'])
+
+        L = [func1(section[:, :, 0], *args)
+             for section in self.section_dict['section_list']]
+        A = [func2(section[:, :, 1], *args)
+             for section in self.section_dict['section_list']]
+        B = [func3(section[:, :, 2], *args)
+             for section in self.section_dict['section_list']]
+
+        # Apply the functions to each section
+        results = [function(section, *args)
+                   for section in self.section_dict['section_list']]
+
+        # Return the output
+        return {
+            'section_list': results,
+            'section_height': self.section_dict['section_height'],
+            'section_width': self.section_dict['section_width'],
+            'height': self.section_dict['height'],
+            'width': self.section_dict['width'],
+        }
+
+    def show_image_sections(self):
+        # Calculate the number of rows and columns for the plot
+        n_rows = int(np.sqrt(len(self.section_dict['section_list'])))
+        n_cols = int(np.ceil(len(self.section_dict['section_list']) / n_rows))
+
+        # Create a figure with subplots
+        fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
+        ax = ax.ravel()
+
+        # Plot each section in its own subplot
+        for i, section in enumerate(self.section_dict['section_list']):
+            ax[i].imshow(section)
+            ax[i].axis('off')
+
+        plt.tight_layout()
+        plt.show()
