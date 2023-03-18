@@ -30,7 +30,7 @@ class ImageProcessor:
         output, class_name = operator.apply(image_array, kernel_matrix)
 
         path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}.png")
+            f'Image/{self.folder_name}/', f"{self.img_name}_{class_name}.png")
         
         if self.hist == True:
             ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
@@ -40,11 +40,7 @@ class ImageProcessor:
         
         return output, path
     
-
-class Operator:
-    pass
-
-class Convolution(Operator):
+class Convolution:
     def __init__(self):
         self.class_name = self.__class__.__name__
         
@@ -85,7 +81,7 @@ class Convolution(Operator):
     def weighted_arithmetic_mean(sub_image, weight_matrix):
         return np.sum(np.multiply(sub_image, weight_matrix))
     
-class Erosion(Operator):
+class Erosion:
     def __init__(self):
         self.class_name = self.__class__.__name__
         
@@ -137,7 +133,7 @@ class Erosion(Operator):
 
         return output, self.class_name
     
-class Dilation(Operator):
+class Dilation:
     def __init__(self):
         self.class_name = self.__class__.__name__
         
@@ -175,7 +171,7 @@ class Dilation(Operator):
 
         return output, self.class_name
     
-class Trimmed_Median(Operator):
+class Trimmed_Median:
     def __init__(self, alpha=0.3):
         frame = inspect.currentframe()
         self.class_name = self.__class__.__name__
@@ -232,7 +228,7 @@ class Trimmed_Median(Operator):
 
         return np.mean(sorted_pixels[left_index:right_index])
 
-class Segmentation_Filter(Operator):
+class Segmentation_Filter:
     def __init__(self, alpha=0.3, k=0.34, R=128):
         self.class_name = self.__class__.__name__
         self.alpha = alpha
@@ -310,6 +306,11 @@ class Segmentation_Filter(Operator):
         output = np.clip(output, 0, 255).astype(np.uint8)
 
         return output, self.class_name
+
+
+
+
+
 
 
 class EdgeDetect:

@@ -45,6 +45,26 @@ class ImageUtil:
         pil_img.save(new_path)
 
         return new_path
+    
+    def load_image(self, folder, file):
+        
+        filepath = os.path.join(folder, file)
+        
+        # Load the image from the file
+        pil_img = Image.open(filepath)
+
+        # Convert image to NumPy array in the appropriate format
+        if pil_img.mode == 'L':
+            img = np.array(pil_img)
+        elif pil_img.mode == 'RGB':
+            img = np.array(pil_img)
+        elif pil_img.mode == 'RGBA':
+            img = np.array(pil_img.convert('RGB'))
+            alpha = np.array(pil_img)[:, :, 3]
+            img = np.dstack((img, alpha))
+            
+        return img
+        
 
     def load_image_from_file(self, filepath):
         # Load the image from the file
