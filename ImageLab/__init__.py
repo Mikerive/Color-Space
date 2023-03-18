@@ -4,4 +4,4 @@ from .noisegenerators import NoiseOverlay
 from .filters import Filters
 from .ImageProcessing import *
 from .colorspace import *
-from .segmentation import Segment
+from .segmentation import *

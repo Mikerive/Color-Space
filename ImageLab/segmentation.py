@@ -8,7 +8,7 @@ from .imageutils import ImagePlotter, ImageUtil
 from .ImageProcessing import Tilation
 
 __all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'Adaptive_Multiple_Threshold',
-           'Adaptive_Global', 'Pixel_Filter', 'Global_Multiple_Threshold',
+           'Adaptive_Global', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
            'Tiled_Adaptive_Threshold_Segmentation']
 
 class Segment:
@@ -77,9 +77,9 @@ class Adaptive_Multiple_Threshold:
             ImagePlotter(masks[i]).plot_image_with_histogram(
                 title=f'mask {ranges[i][0]}:{ranges[i][1]}')
 
-        return masks
+        return masks, self.class_name
 
-class Adaptive_Multiple_Threshold:
+class Global_Threshold:
     def __init__(self, threshold_value):
         self.class_name = self.__class__.__name__
         self.threshold_value = threshold_value
@@ -93,7 +93,7 @@ class Adaptive_Multiple_Threshold:
         ImagePlotter(output).plot_image(
             title=f'Threshold value: {self.threshold_value}')
 
-        return output
+        return output, self.class_name
 
 class Adaptive_Global_Threshold:
     """
@@ -104,6 +104,7 @@ class Adaptive_Global_Threshold:
     :return: The thresholded image as a binary NumPy array.
     """
     def __init__(self, mode='mean', deltaT=3):
+        self.class_name = self.__class__.__name__
         self.deltaT = deltaT
         self.mode = mode
     
@@ -135,25 +136,23 @@ class Adaptive_Global_Threshold:
             title=f'{self.img_name}')
 
         # Create a binary mask by comparing the image with the threshold value
-        mask1, mask2 = np.zeros_like(image), np.zeros_like(image)
+        mask2 = np.zeros_like(image)
 
-        mask1[image < threshold] = 255
-        mask2[image >= threshold] = 255
+        mask2[image > threshold] = 255
 
-        ImagePlotter(mask1).plot_image_with_histogram(
-            title=f'0:{threshold}')
         ImagePlotter(mask2).plot_image_with_histogram(
             title=f'{threshold}:255')
         # Clip the output image to ensure that pixel values are within [0, 255]
-        output = np.clip(mask1, 0, 255).astype(np.uint8)
         output = np.clip(mask2, 0, 255).astype(np.uint8)
 
-        return mask1, mask2
+        return mask2, self.class_name
 
 class Pixel_Filter:
-    def __init__(self, window_size, func_type='Sauvola'):
+    def __init__(self, window_size, func_type='Sauvola', hist = False):
+        self.class_name = self.__class__.__name__
         self.window_size = window_size
         self.func_type = func_type
+        self.hist = hist
     
     @staticmethod
     @jit(nopython=True)
@@ -230,10 +229,11 @@ class Pixel_Filter:
             ImagePlotter(output).plot_image(
                 title=f'{self.img_name}')
 
-        return output
+        return output, self.class_name
 
 class Global_Multiple_Threshold:
     def __init__(self, minima):
+        self.class_name = self.__class__.__name__
         self.minima = minima
     def apply(self, img):
         # Find the ranges of pixel values corresponding to halfway between each peak
@@ -265,10 +265,11 @@ class Global_Multiple_Threshold:
             ImagePlotter(masks[i]).plot_image(
                 title=f'Map {ranges[i][0]}:{ranges[i][1]}')
 
-        return masks
+        return masks, self.class_name
 
 class Tiled_Adaptive_Threshold_Segmentation:
     def __init__(self, n=30, background_difference=5, deltaT=3):
+        self.class_name = self.__class__.__name__
         self.n = n
         self.background_difference=background_difference
         self.deltaT = deltaT
@@ -305,4 +306,4 @@ class Tiled_Adaptive_Threshold_Segmentation:
 
         Tilation(name=f'adaptive_seg_{self.img_name} {self.n}:{self.background_difference}').merge_sections_into_image(
             image_dict)
-        return image
+        return image, self.class_name
