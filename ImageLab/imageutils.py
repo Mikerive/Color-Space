@@ -4,7 +4,7 @@ import cv2
 import os
 from PIL import Image
 
-__all__ = ["ImageUtil", "ImagePlotter", "MultiPlotter", "Tilation"]
+__all__ = ["ImageUtil", "ImagePlotter", "MultiPlotter"]
 
 class ImageUtil:
     # Deals with PIL objects
@@ -12,7 +12,7 @@ class ImageUtil:
     def __init__(self, img = None):
         if img is None:
             img = np.full((10,10), 1)
-        self.img = img
+        self.img = np.uint8(img)
     
     def save_image_to_folder(self, folder_name, filename):
         # Create the folder if it doesn't exist
@@ -24,6 +24,9 @@ class ImageUtil:
             mode = 'L'
         elif self.img.shape[2] == 3:
             mode = 'RGB'
+        elif self.img.shape[2] == 1:
+            self.img = np.squeeze(self.img)
+            mode = 'L'
         elif self.img.shape[2] == 4:
             mode = 'RGBA'
         else:
@@ -31,6 +34,7 @@ class ImageUtil:
         if mode == 'RGB':
             pil_img = Image.fromarray(self.img)
         elif mode == 'L':
+            
             pil_img = Image.fromarray(self.img, mode=mode)
         elif mode == 'RGBA':
             pil_img = Image.fromarray(self.img, mode=mode)
@@ -278,122 +282,3 @@ class MultiPlotter(ImageUtil):
     def plot_images_with_histograms(self, title = 'default', cmap = None):
         for i, img in enumerate(self.images):
             ImagePlotter(img).plot_image_with_histogram(title=f'{title} {i}', cmap=cmap)
-            
-
-class Tilation(ImageUtil):
-    #Takes Pillow Objects
-    def __init__(self, img=np.full((5, 5), 1), name='default', hist = True):
-        self.img = img
-        self.section_dict = None
-        self.image_name = name
-        self.hist = hist
-        
-
-    def split_image_nxn_sections(self, sections):
-        
-        # Get the size of the image
-        height, width = self.img.shape[:2]
-        
-        layers = 0
-        
-        if len(self.img.shape) == 2:
-            layers = 1
-        else:
-            layers = self.img.shape[2]
-
-        # Calculate the height of each section
-        section_height = int(np.ceil(height / sections))
-
-        # Calculate the width of each section
-        section_width = int(np.ceil(width / sections))
-
-        # Initialize the list to store the sections
-        section_list = []
-
-        if layers == 1:
-            # Split the image into sections
-            for row in range(0, height, section_height):
-                for col in range(0, width, section_width):
-                    section = self.img[row:row + section_height,
-                                    col:col + section_width]
-                    section_list.append(section)
-        else:
-            # Split the image into sections
-            for row in range(0, height, section_height):
-                for col in range(0, width, section_width):
-                    section = self.img[row:row + section_height,
-                                       col:col + section_width, :]
-                    section_list.append(section)
-
-        # Return the output wrapped in a dictionary
-        section_dict = {
-            'section_list': section_list,
-            'section_height': section_height,
-            'section_width': section_width,
-            'height': height,
-            'width': width,
-        }
-        self.section_dict = section_dict
-        return section_dict
-
-    def merge_sections_into_image(self, section_dict):
-        # Get the number of channels from the first section
-        num_channels = section_dict['section_list'][0].shape[2]
-
-        # Initialize the result image with the correct number of channels
-        result_img = np.zeros((section_dict['height'], section_dict['width'], num_channels), dtype=np.uint8)
-
-        # Merge the sections into a single image
-        index = 0
-        for row in range(0, section_dict['height'], section_dict['section_height']):
-            for col in range(0, section_dict['width'], section_dict['section_width']):
-                section = section_dict['section_list'][index]
-                result_img[row:row + section_dict['section_height'],
-                        col:col + section_dict['section_width'], :] = section
-                index += 1
-                
-        if self.hist == True:
-            ImagePlotter(result_img).plot_image_with_histogram(title=f'{self.image_name}')
-        else:
-            ImagePlotter(result_img).plot_image(
-                title=f'{self.image_name}')
-        return result_img
-
-    def func_pass(x): return x
-
-    def apply_function_nxn_sections(self, func1=func_pass, func2=func_pass, func3=func_pass, *args):
-        
-        L, A, B = cv2.split(self.section_dict['section_list'])
-
-        L = [func1(section[:,:,0], *args) for section in self.section_dict['section_list']]
-        A = [func2(section[:,:,1], *args) for section in self.section_dict['section_list']]
-        B = [func3(section[:,:,2], *args) for section in self.section_dict['section_list']]
-        
-        # Apply the functions to each section
-        results = [function(section, *args) for section in self.section_dict['section_list']]
-
-        # Return the output
-        return {
-            'section_list': results,
-            'section_height': self.section_dict['section_height'],
-            'section_width': self.section_dict['section_width'],
-            'height': self.section_dict['height'],
-            'width': self.section_dict['width'],
-        }
-
-    def show_image_sections(self):
-        # Calculate the number of rows and columns for the plot
-        n_rows = int(np.sqrt(len(self.section_dict['section_list'])))
-        n_cols = int(np.ceil(len(self.section_dict['section_list']) / n_rows))
-
-        # Create a figure with subplots
-        fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
-        ax = ax.ravel()
-
-        # Plot each section in its own subplot
-        for i, section in enumerate(self.section_dict['section_list']):
-            ax[i].imshow(section)
-            ax[i].axis('off')
-
-        plt.tight_layout()
-        plt.show()

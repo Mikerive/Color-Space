@@ -1,9 +1,9 @@
 import numpy as np
 from skimage.transform import resize
 
-from .convolution import Convolution
 from .noisegenerators import NoiseOverlay
 from .imageutils import *
+from .ImageProcessing import Convolution
 
 __all__ = ['Filters']
 
@@ -113,9 +113,6 @@ class Filters:
         
         # ImagePlotter(img).plot_image_with_histogram(
         #     title=f'{self.img_name}', cmap='Greys')
-        
-        
-
     
     def unsharp_masking(self, mean, var):
         noise = NoiseOverlay(self.img).add_gaussian_noise(mean, var)
