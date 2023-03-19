@@ -28,9 +28,11 @@ class ImageProcessor:
         
         # Apply the operator to the input image
         output, class_name = operator.apply(image_array, kernel_matrix)
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
 
         path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}_{class_name}.png")
+            f'Image/{self.folder_name}/', f"{self.img_name}.png")
         
         if self.hist == True:
             ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
@@ -326,77 +328,7 @@ class EdgeDetect:
         if (self.img.ndim == 2):
             self.img = np.expand_dims(self.img, axis=2)
 
-    def prewitt_edge_detector(self, n, threshold=4):
-        v_kernel = self.prewitt_kernel(n)
-        h_kernel = v_kernel.T
-        
-        vimg, _ = Convolution(self.img, f'prewitt_v_n={n}').convolution(v_kernel, Convolution().weighted_arithmetic_mean_threshold, threshold = threshold)
-        himg, _ = Convolution(self.img, f'prewitt_h_n={n}').convolution(h_kernel, Convolution().weighted_arithmetic_mean_threshold, threshold = threshold)
-        
-        magnitude = self.gradient_magnitude(himg, vimg)
-        direction = self.gradient_direction(himg, vimg)
-        
-        if self.hist == True:
-            ImagePlotter(magnitude).plot_image_with_histogram(
-                title=f'{self.img_name}_n={n}')
-            ImagePlotter(direction).plot_image(
-                title=f'{self.img_name}_n={n}')
-        else:
-            ImagePlotter(magnitude).plot_image(
-                title=f'{self.img_name}_n={n}')
-            ImagePlotter(direction).plot_image(
-                title=f'{self.img_name}_n={n}')
-
-        _ = ImageUtil(magnitude).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}_magnitude.png")
-        _ = ImageUtil(direction).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}_direction.png")
-        return magnitude, direction
-        
-    @staticmethod
-    def gradient_mag(himg, vimg):
-        mag = np.zeros_like(himg).astype(np.float64)
-        return EdgeDetect.magnitude(mag,himg,vimg).astype(np.uint8)
     
-    @staticmethod
-    @jit(nopython=True)
-    def magnitude(mag, himg, vimg):
-        for i in range(himg.shape[0]):
-            for j in range(himg.shape[1]):
-                mag[i][j] = (himg[i][j]**2 + vimg[i][j]**2)**0.5
-        return (mag / np.amax(mag)) * 255.0
-    
-    def gradient_direction(self, himg, vimg):
-        angle = np.arctan2(vimg.astype(np.float32),
-                           himg.astype(np.float32))  # compute angle
-
-        # Convert the radians to degrees and scale the range from [0, pi] to [0, 255]
-        return ((angle + np.pi) * 255.0 / (2 * np.pi)).astype(np.uint8)
-        
-    def hough_transform(img_bin, theta_res=1, rho_res=1):
-        h, w = img_bin.shape
-        diag_len = int(np.ceil(np.sqrt(h*h + w*w)))
-        rhos = np.linspace(-diag_len, diag_len, diag_len * 2 / rho_res + 1)
-        thetas = np.arange(0, 180, theta_res)
-
-        cos_t = np.cos(np.deg2rad(thetas))
-        sin_t = np.sin(np.deg2rad(thetas))
-        num_thetas = len(thetas)
-
-        accumulator = np.zeros(
-            (int(2 * diag_len / rho_res), num_thetas), dtype=np.uint64)
-        y_idxs, x_idxs = np.nonzero(img_bin)
-
-        for i in range(len(x_idxs)):
-            x = x_idxs[i]
-            y = y_idxs[i]
-
-            for t_idx in range(num_thetas):
-                rho = int((x * cos_t[t_idx] + y * sin_t[t_idx]) + diag_len)
-                accumulator[rho, t_idx] += 1
-
-        return accumulator, thetas, rhos
-
 class Kernels():
     def __init__(self):
         pass
