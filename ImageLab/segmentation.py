@@ -7,19 +7,20 @@ from numba import jit
 from .imageutils import ImagePlotter, ImageUtil
 from .ImageProcessing import Tilation
 
-__all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'Adaptive_Multiple_Threshold',
-           'Adaptive_Global', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
+__all__ = ['Segment', 'Adaptive_Multiple_Threshold',
+           'Adaptive_Global_Threshold', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
            'Tiled_Adaptive_Threshold_Segmentation']
 
 class Segment:
-    def __init__(self, image_path, folder_name, hist=False):
+    def __init__(self, image_path, folder_name, img_name, hist=False):
         self.image_path = image_path
         self.folder_name = folder_name
+        self.img_name = img_name
         self.hist = hist
 
     def process(self, operator):
         # Open the input image
-        image = Image.open(self.image_path)
+        image = Image.open(self.image_path).convert('L')
         image_array = np.array(image)
 
         if image_array.ndim == 2:
@@ -29,18 +30,18 @@ class Segment:
         output, class_name = operator.apply(image_array)
 
         path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{class_name}.png")
+            f'Image/{self.folder_name}/', f"{self.img_name}.png")
 
         return output, path
 
-class Adaptive_Multiple_Threshold:
+class Adaptive_Multiple_Threshold(Segment):
     def __init__(self, distance=10, width=8):
         self.class_name = self.__class__.__name__
         self.distance = distance
         self.width = width
-    def apply(self):
+    def apply(self, img):
         # Calculate the histogram of the image
-        hist, bins = np.histogram(self.img.flatten(), bins=256, range=(0, 255))
+        hist, bins = np.histogram(img.flatten(), bins=256, range=(0, 255))
 
         # Find the peaks in the histogram using the find_peaks function from SciPy
         from scipy.signal import find_peaks
@@ -64,30 +65,29 @@ class Adaptive_Multiple_Threshold:
         masks = []
         for r in ranges:
             # Values within the range arr assigned 255, the rest 0
-            mask = np.zeros_like(self.img)
+            mask = np.zeros_like(img)
             mask[(self.img >= r[0]) & (self.img <= r[1])] = 255
             masks.append(mask)
 
         # Show the original image and its histogram
-        ImagePlotter(self.img).plot_image_with_histogram(
+        ImagePlotter(img).plot_image_with_histogram(
             title=f'{self.img_name}')
 
         # Show the identified objects
         for i in range(len(masks)):
-            ImagePlotter(masks[i]).plot_image_with_histogram(
-                title=f'mask {ranges[i][0]}:{ranges[i][1]}')
+            ImagePlotter(masks[i]).plot_image(title=f'mask {ranges[i][0]}:{ranges[i][1]}')
 
         return masks, self.class_name
 
-class Global_Threshold:
+class Global_Threshold(Segment):
     def __init__(self, threshold_value):
         self.class_name = self.__class__.__name__
         self.threshold_value = threshold_value
 
-    def apply(self):
+    def apply(self, img):
 
         # Apply thresholding
-        output = (self.img > self.threshold_value).astype(np.uint8) * 255
+        output = (img > self.threshold_value).astype(np.uint8) * 255
 
         # Display the output image
         ImagePlotter(output).plot_image(
@@ -95,7 +95,7 @@ class Global_Threshold:
 
         return output, self.class_name
 
-class Adaptive_Global_Threshold:
+class Adaptive_Global_Threshold(Segment):
     """
     Applies global thresholding to an input grayscale image.
     
@@ -131,23 +131,18 @@ class Adaptive_Global_Threshold:
                 done = True
             threshold = thresholdnext
 
-        # Show the original image and its histogram
-        ImagePlotter(img).plot_image_with_histogram(
-            title=f'{self.img_name}')
-
         # Create a binary mask by comparing the image with the threshold value
         mask2 = np.zeros_like(image)
 
         mask2[image > threshold] = 255
 
-        ImagePlotter(mask2).plot_image_with_histogram(
-            title=f'{threshold}:255')
+        ImagePlotter(mask2).plot_image(title=f'{threshold}:255')
         # Clip the output image to ensure that pixel values are within [0, 255]
         output = np.clip(mask2, 0, 255).astype(np.uint8)
 
         return mask2, self.class_name
 
-class Pixel_Filter:
+class Pixel_Filter(Segment):
     def __init__(self, window_size, func_type='Sauvola', hist = False):
         self.class_name = self.__class__.__name__
         self.window_size = window_size
@@ -156,21 +151,21 @@ class Pixel_Filter:
     
     @staticmethod
     @jit(nopython=True)
-    def Niblack(window, row, col, channel, k=-0.2):
+    def Niblack(window, padding_size, k=-0.2):
         # Compute the mean and standard deviation for each channel separately
         means = np.mean(window)
         stds = np.std(window)
 
         thresholds = means + k * stds
 
-        if window[row, col, channel] > thresholds:
+        if window[padding_size, padding_size] > thresholds:
             return 255
         else:
             return 0
 
     @staticmethod
     @jit(nopython=True)
-    def Sauvola(window, row, col, channel, k=0.34, R=128):
+    def Sauvola(window, padding_size, k=0.34, R=128):
         # Compute the mean and standard deviation for each channel separately
         means = np.mean(window)
         stds = np.std(window)
@@ -178,20 +173,20 @@ class Pixel_Filter:
         # Compute the local threshold for each channel
         thresholds = means * (1.0 + k * (-1 + stds / R))
 
-        if window[row, col, channel] > thresholds:
+        if window[padding_size, padding_size] > thresholds:
             return 255
         else:
             return 0
 
     @staticmethod
     @jit(nopython=True)
-    def Bernsen(window, row, col, channel):
+    def Bernsen(window, padding_size):
         # Compute the mean and standard deviation for each channel separately
         maxs = np.max(window)
         mins = np.min(window)
 
         thresholds = (maxs + mins)/2
-        if window[row, col, channel] > thresholds:
+        if window[padding_size, padding_size] > thresholds:
             return 255
         else:
             return 0
@@ -199,7 +194,7 @@ class Pixel_Filter:
     def apply(self, img):
         # Takes Niblack, Sauvola, and Bernsen filter functions
         # Calculate the padding size based on the window size
-        padding_size = int(self.window_size.shape[0] // 2)
+        padding_size = int(self.window_size) // 2
 
         # Pad the image with zeros
         padded_image = np.pad(img, ((padding_size, padding_size),
@@ -215,23 +210,20 @@ class Pixel_Filter:
             func = self.Bernsen
 
         output = np.zeros_like(img)
-        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], row, col, channel)
+        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size)
                   for row in range(padding_size, padded_image.shape[0] - padding_size)
                   for col in range(padding_size, padded_image.shape[1] - padding_size)
                   for channel in range(0, img.shape[2])]
+        
+        output = np.array(output).reshape(img.shape)
 
         output = np.clip(output, 0, 255).astype(np.uint8)
 
-        if self.hist == True:
-            ImagePlotter(output).plot_image_with_histogram(
-                title=f'{self.img_name}_{self.window_size}')
-        else:
-            ImagePlotter(output).plot_image(
-                title=f'{self.img_name}')
+        ImagePlotter(output).plot_image(title=f'{self.func_type}')
 
         return output, self.class_name
 
-class Global_Multiple_Threshold:
+class Global_Multiple_Threshold(Segment):
     def __init__(self, minima):
         self.class_name = self.__class__.__name__
         self.minima = minima
@@ -267,7 +259,7 @@ class Global_Multiple_Threshold:
 
         return masks, self.class_name
 
-class Tiled_Adaptive_Threshold_Segmentation:
+class Tiled_Adaptive_Threshold_Segmentation(Segment):
     def __init__(self, n=30, background_difference=5, deltaT=3):
         self.class_name = self.__class__.__name__
         self.n = n
@@ -304,6 +296,5 @@ class Tiled_Adaptive_Threshold_Segmentation:
                     sections[i][:, :, layer] = np.clip(
                         mask, 0, 255).astype(np.uint8)
 
-        Tilation(name=f'adaptive_seg_{self.img_name} {self.n}:{self.background_difference}').merge_sections_into_image(
-            image_dict)
+        Tilation(name=f'adaptive_seg_{self.n}:{self.background_difference}').merge_sections_into_image(image_dict)
         return image, self.class_name
