@@ -9,14 +9,16 @@ from PIL import Image
 import inspect
 from functools import partial
 
-__all__ = ['ImageProcessor', 'Convolution', 'Dilation', 'Erosion', 'EdgeDetect', 'Tilation', 'Kernels', 'Segmentation_Filter']
+__all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion', 'Tilation', 'Segmentation_Filter']
 
-class ImageProcessor:
-    def __init__(self, image_path, folder_name, img_name, hist = False):
+class Processor:
+    def __init__(self, image_path, folder_name, img_name, hist = False, plot = False, save_image = True):
         self.image_path = image_path
         self.folder_name = folder_name
         self.img_name = img_name
         self.hist = hist
+        self.plot = plot
+        self.save_image = save_image
     
     def process(self, operator, kernel_matrix):
         # Open the input image
@@ -25,22 +27,50 @@ class ImageProcessor:
         
         if image_array.ndim == 2:
             image_array = np.expand_dims(image_array, axis=2)
-        
         # Apply the operator to the input image
         output, class_name = operator.apply(image_array, kernel_matrix)
         
         output = np.clip(output, 0, 255).astype(np.uint8)
-
-        path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}.png")
         
-        if self.hist == True:
-            ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
-            
-        else:
-            ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
         
-        return output, path
+        if self.save_image == True:
+            path = ImageUtil(output).save_image_to_folder(
+                f'Image/{self.folder_name}/', f"{self.img_name}.png")
+            return output, path
+        
+        return output
+    
+class ImageProcessor:
+    def __init__(self, img, plot = False, hist = False):
+        self.img = img
+        self.hist = hist
+        self.plot = plot
+    
+    def process(self, operator, kernel_matrix):
+        # Open the input image
+        image_array = np.array(self.img)
+        
+        if image_array.ndim == 2:
+            image_array = np.expand_dims(image_array, axis=2)
+        # Apply the operator to the input image
+        output, class_name = operator.apply(image_array, kernel_matrix)
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        
+        return output
     
 class Convolution:
     def __init__(self):
@@ -118,7 +148,7 @@ class Erosion:
 
         # Pad the image with zeros
         padded_image = np.array(np.pad(img, ((
-            padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant', constant_values=0))
+            padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant', constant_values=255))
 
         
 
@@ -308,64 +338,7 @@ class Segmentation_Filter:
         output = np.clip(output, 0, 255).astype(np.uint8)
 
         return output, self.class_name
-
-
-
-
-
-
-
-class EdgeDetect:
-    def __init__(self, img=np.full((1, 1), 1), folder_name='default', img_name='default', hist=False):
-        self.img = np.array(img)
-        self.list_img = img
-
-        self.img_name = img_name
-        self.folder_name = folder_name
-
-        self.hist = hist
-        # If 2d, make 3d
-        if (self.img.ndim == 2):
-            self.img = np.expand_dims(self.img, axis=2)
-
-    
-class Kernels():
-    def __init__(self):
-        pass
-    def prewitt_kernel(self, size):
-        """
-        Generates the Vertical Prewitt Kernel of specified size
-        """
-        # Create the Prewitt matrix.
-        kernel = np.zeros((size, size))
-
-        for j in range(size):
-            if j < size // 2:
-                kernel[:, j] = -1
-            elif j > size // 2:
-                kernel[:, j] = 1
-
-        return kernel
-
-    def gaussian_kernel(n, sigma):
-        x, y = np.meshgrid(np.arange(-n // 2 + 1, n // 2 + 1),
-                           np.arange(-n // 2 + 1, n // 2 + 1))
-        g = np.exp(-(x**2 + y**2) // (2 * sigma**2))
-        return g
-
-    def LoG_kernel(n, sigma):
-
-        # Create a 1-D array of indices, centering them around 0
-        ind = np.arange(-n // 2, n // 2 + 1)
-
-        # Create 2D arrays of zeros for the LoG filter and Gaussian filter
-        L, G = np.meshgrid(ind, ind, indexing='ij')
-        LoG_filter = (-1 / (np.pi * sigma ** 4)) * (1 - (L ** 2 + G ** 2) /
-                                                    (2 * sigma ** 2)) * np.exp(-(L ** 2 + G ** 2) / (2 * sigma ** 2))
-
-        # Normalize the filter so that its values sum up to 0
-        return LoG_filter / np.sum(LoG_filter)
-
+        
 class Tilation(ImageUtil):
     # Takes Pillow Objects
     def __init__(self, img=np.full((5, 5), 1), name='default', hist=True):

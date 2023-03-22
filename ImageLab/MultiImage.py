@@ -3,10 +3,10 @@ from .imageutils import ImageUtil, ImagePlotter
 import numpy as np
 from numba import jit
 
-__all__ = ['MultiImage', 'Gradient_Magnitude', 'Gradient_Direction']
+__all__ = ['MultiProcessor', 'Gradient_Magnitude', 'Gradient_Direction', 'Difference', 'Sum']
 
 
-class MultiImage:
+class MultiProcessor:
     def __init__(self, image1_path, image2_path, folder_name, output_name, hist = False):
         self.image1_path = image1_path
         self.image2_path = image2_path

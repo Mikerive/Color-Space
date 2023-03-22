@@ -64,7 +64,6 @@ class ImageUtil:
             img = np.dstack((img, alpha))
             
         return img
-        
 
     def load_image_from_file(self, filepath):
         # Load the image from the file
@@ -81,19 +80,6 @@ class ImageUtil:
             img = np.dstack((img, alpha))
 
         return img
-
-    def create_subimage(self, x_start, y_start, x_end, y_end):
-        
-        img = np.asarray(self.img)
-        
-        if np.ndim(self.img)==2:
-            img = np.squeeze(img)
-            subimg = img[y_start:y_end, x_start:x_end]
-            return subimg
-        else:
-            # Create the subimage
-            subimg = img[y_start:y_end, x_start:x_end, :]
-            return subimg
     
     def np_to_PIL_convert(self, img):
     # Convert numpy type to PIL image

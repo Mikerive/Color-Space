@@ -9,18 +9,20 @@ from .ImageProcessing import Tilation
 
 __all__ = ['Segment', 'Adaptive_Multiple_Threshold',
            'Adaptive_Global_Threshold', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
-           'Tiled_Adaptive_Threshold_Segmentation']
+           'Tiled_Adaptive_Threshold_Segmentation', 'ImageSegment']
 
 class Segment:
-    def __init__(self, image_path, folder_name, img_name, hist=False):
+    def __init__(self, image_path, folder_name, img_name, plot = False, hist = False, save_image = True):
         self.image_path = image_path
         self.folder_name = folder_name
         self.img_name = img_name
         self.hist = hist
+        self.plot = plot
+        self.save_image = save_image
 
     def process(self, operator):
-        # Open the input image
-        image = Image.open(self.image_path).convert('L')
+
+        image = Image.open(self.image_path)
         image_array = np.array(image)
 
         if image_array.ndim == 2:
@@ -28,11 +30,43 @@ class Segment:
 
         # Apply the operator to the input image
         output, class_name = operator.apply(image_array)
+        
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        
+        if self.save_image == True:
+            path = ImageUtil(output).save_image_to_folder(f'Image/{self.folder_name}/', f"{self.img_name}.png")
+            return output, path
 
-        path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{self.img_name}.png")
+        return output
+    
+class ImageSegment:
+    def __init__(self, img, plot = False, hist = False):
+        self.img = img
+        self.hist = hist
+        self.plot = plot
+        
+    def process(self, operator):
+    
+        image_array = np.array(self.img)
+        if image_array.ndim == 2:
+            image_array = np.expand_dims(image_array, axis=2)
 
-        return output, path
+        # Apply the operator to the input image
+        output, class_name = operator.apply(image_array)
+        
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+
+        return output
+    
+        
 
 class Adaptive_Multiple_Threshold(Segment):
     def __init__(self, distance=10, width=8):
@@ -260,7 +294,7 @@ class Global_Multiple_Threshold(Segment):
         return masks, self.class_name
 
 class Tiled_Adaptive_Threshold_Segmentation(Segment):
-    def __init__(self, n=30, background_difference=5, deltaT=3):
+    def __init__(self, n=2, background_difference=5, deltaT=3):
         self.class_name = self.__class__.__name__
         self.n = n
         self.background_difference=background_difference

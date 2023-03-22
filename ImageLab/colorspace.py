@@ -8,32 +8,67 @@ __all__ = ['ColorSpace', 'bgr_to_rgb', 'rgb_to_grayscale', 'inversion', 'rgb_to_
 
 
 class ColorSpace:
-    def __init__(self, image_path, folder_name, hist = False):
+    def __init__(self, image_path, folder_name, img_name, plot = False, hist = False, save_image = True):
         self.image_path = image_path
         self.folder_name = folder_name
+        self.img_name = img_name
         self.hist = hist
+        self.plot = plot
+        self.save_image = save_image
     
     def process(self, operator):
-        # Open the input image
+        
         image = Image.open(self.image_path)
         image_array = np.array(image)
         
         if image_array.ndim == 2:
             image_array = np.expand_dims(image_array, axis=2)
-        
+            
         # Apply the operator to the input image
         output, class_name = operator.apply(image_array)
-
-        path = ImageUtil(output).save_image_to_folder(
-            f'Image/{self.folder_name}/', f"{class_name}.png")
         
-        if self.hist == True:
-            ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')  
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        
+        if self.save_image == True:
+            path = ImageUtil(output).save_image_to_folder(
+                f'Image/{self.folder_name}/', f"{self.img_name}.png")
+            return output, path
+        
+        return output
+    
+class ImageColorSpace:
+    def __init__(self, img, plot = False, hist = False):
+        self.img = img
+        self.plot = plot
+        self.hist = hist
+        
+    def process(self, operator):
+        
+        image_array = np.array(self.img)
+        
+        if image_array.ndim == 2:
+            image_array = np.expand_dims(image_array, axis=2)
             
-        else:
-            ImagePlotter(output).plot_image(f'{class_name}')
+        # Apply the operator to the input image
+        output, class_name = operator.apply(image_array)
         
-        return output, path
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        if self.plot == True:
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        
+        return output
+    
     
     
 class bgr_to_rgb:
