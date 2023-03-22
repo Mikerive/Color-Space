@@ -1,5 +1,6 @@
 import numpy as np
 from skimage.transform import resize
+from PIL import Image
 
 from .noisegenerators import NoiseOverlay
 from .imageutils import *
@@ -8,9 +9,35 @@ from .ImageProcessing import Convolution
 __all__ = ['Filters']
 
 class Filters:
-    def __init__(self, img = None, img_name = 'default'):
-        self.img = np.asarray(img)
+    def __init__(self, image_path, folder_name, img_name, hist = False):
+        self.image_path = image_path
+        self.folder_name = folder_name
         self.img_name = img_name
+        self.hist = hist
+    
+    def process(self, operator):
+        # Open the input image
+        image = Image.open(self.image_path)
+        image_array = np.array(image)
+        
+        if image_array.ndim == 2:
+            image_array = np.expand_dims(image_array, axis=2)
+        
+        # Apply the operator to the input image
+        output, class_name = operator.apply(image_array)
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
+
+        path = ImageUtil(output).save_image_to_folder(
+            f'Image/{self.folder_name}/', f"{self.class_name}.png")
+        
+        if self.hist == True:
+            ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+            
+        else:
+            ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+        
+        return output, path
         
     def reduce_size(self, factor=2):
         img = np.array(self.img).astype(np.int)
@@ -23,9 +50,12 @@ class Filters:
         img_resized = np.clip(img_resized, 0, 255).astype(np.uint8)
         return img_resized
 
-    def contrast_stretch(self):
-        # Convert the image to a numpy array
-        img = np.array(self.img).astype(np.int)
+
+class contrast_stretch:
+    def __init__(self):
+        self.class_name = self.__class__.__name__
+        
+    def apply(self, img):
 
         # Calculate the minimum and maximum values of the image
         min_val = np.min(img)
@@ -41,27 +71,34 @@ class Filters:
 
         # Convert the image back to 8-bit unsigned integer format
         img = np.clip(img, 0, 255).astype(np.uint8)
+        return img, self.class_name
+    
+class gamma_correction:
+    def __init__(self, gamma=1.0, alpha=0.0):
+        self.class_name = self.__class__.__name__
+        self.gamma = gamma
+        self.alpha = alpha
         
-        self.img = img
-        return img
-
-    def gamma_correction(self, gamma=1.0, alpha=0.0):
+    def apply(self, img):
         # Convert the image to a numpy array
         img = np.array(self.img).astype(np.int)
 
         # Normalize the image to the range [0, 1]
         img = img / 255.0
-
+        
         # Apply the gamma correction
-        img = np.power(img+alpha, gamma)
+        img = np.power(img+self.alpha, self.gamma)
 
         # Scale the image back to the range [0, 255]
         img = np.clip(img * 255, 0, 255).astype(np.uint8)
         
-        self.img = img
-        return img
+        return img, self.class_name
 
-    def histogram_equalization(self):
+
+class histogram_equalization:
+    def __init__(self):
+        self.class_name = self.__class__.__name__
+    def apply(self, img):
         
         # Convert the image to a numpy array
         img = np.array(self.img).astype(np.int8)
@@ -80,48 +117,19 @@ class Filters:
         img = np.clip(img*255, 0, 255).astype(np.uint8)
         
         self.img = img
-        return img
+        return img, self.class_name
 
-    def sharpening(self, kernel=np.array([[0, -1, 0],
-                                          [-1, 5, -1],
-                                          [0, -1, 0]])):
+# Sharpening is a helpful method for emphasizing the differences between colors in images
 
-        # Normalize the kernel
-        kernel = kernel / np.sum(kernel)
 
-        # Pad the image with zeros to handle border pixels
-        padded_image = np.pad(self.img, 1, 'constant', constant_values=0)
-
-        # Apply the kernel to the image using convolution
-        sharp = np.zeros_like(self.img)
-        for i in range(self.img.shape[0]):
-            for j in range(self.img.shape[1]):
-                sharp[i, j] = np.sum(kernel * padded_image[i:i+3, j:j+3])
-
-        # Clip the output image to ensure that pixel values are within [0, 255]
-        sharp = np.clip(sharp, 0, 255).astype(np.uint8)
-        
-        ImagePlotter(sharp).plot_image_with_histogram(
-            title=f'{self.img_name}', cmap='Greys')
-        
-        # img = self.img - sharp
-        
-        # ImagePlotter(img).plot_image_with_histogram(
-        #     title=f'{self.img_name}', cmap='Greys')
-        
-        # img = self.img + img
-        
-        # ImagePlotter(img).plot_image_with_histogram(
-        #     title=f'{self.img_name}', cmap='Greys')
-    
-    def unsharp_masking(self, mean, var):
-        noise = NoiseOverlay(self.img).add_gaussian_noise(mean, var)
-        img = np.copy(self.img)
-        sharp = img - noise
-        ImagePlotter(sharp).plot_image_with_histogram(
-            title=f'{self.img_name} {mean}:{var}', cmap='Greys')
-        sharpened = img + sharp
-        ImagePlotter(sharpened).plot_image_with_histogram(
-            title=f'{self.img_name} {mean}:{var}', cmap='Greys')
-        return sharpened
+#     def unsharp_masking(self, mean, var):
+#         noise = NoiseOverlay(self.img).add_gaussian_noise(mean, var)
+#         img = np.copy(self.img)
+#         sharp = img - noise
+#         ImagePlotter(sharp).plot_image_with_histogram(
+#             title=f'{self.img_name} {mean}:{var}', cmap='Greys')
+#         sharpened = img + sharp
+#         ImagePlotter(sharpened).plot_image_with_histogram(
+#             title=f'{self.img_name} {mean}:{var}', cmap='Greys')
+#         return sharpened
     
