@@ -9,7 +9,7 @@ from PIL import Image
 import inspect
 from functools import partial
 
-__all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion', 'Tilation', 'Segmentation_Filter']
+__all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion', 'Tilation']
 
 class Processor:
     def __init__(self, image_path, folder_name, img_name, hist = False, plot = False, save_image = True):
@@ -65,10 +65,10 @@ class ImageProcessor:
         
         if self.plot == True:
             if self.hist == True:
-                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image_with_histogram(f'{class_name}')
                 
             else:
-                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image(f'{class_name}')
         
         return output
     
@@ -76,13 +76,8 @@ class Convolution:
     def __init__(self):
         self.class_name = self.__class__.__name__
         
-    def apply(self, img=np.full((1, 1), 1), kernel_matrix=np.full((3, 3), 1)):
-        # If 2d, make 3d
-        if (img.ndim == 2):
-            img = np.expand_dims(img, axis=2)
-        
+    def apply(self, img, kernel_matrix):        
         k_matrix = np.array(kernel_matrix).astype(np.float64)
-        img = np.array(np.copy(img))
         
         # Get dimensions of the kernel.
         kernel_size = k_matrix.shape[0]
@@ -91,6 +86,7 @@ class Convolution:
         # Pad the image with zeros
         padded_image = np.array(np.pad(img, ((padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant'))
         
+        # Normalize the Kernel
         if np.sum(k_matrix) == 0:
             k_matrix_norm = k_matrix
         else:
@@ -112,6 +108,77 @@ class Convolution:
     @jit(nopython=True)
     def weighted_arithmetic_mean(sub_image, weight_matrix):
         return np.sum(np.multiply(sub_image, weight_matrix))
+    
+class HOG:
+    def __init__(self, ref_img, threshold):
+        self.ref_img = ref_img
+        self.threshold = threshold
+        self.class_name = self.__class__.__name__
+    
+    @staticmethod
+    def apply(self, target_img):
+        
+        target_img_hpadding = self.ref_img.shape[0] // 2
+        target_img_vpadding = self.ref_img.shape[1] // 2
+        
+        
+        img = np.zeros_like(target_img)
+        # nested for-loop version of the code
+        for row in range(target_img_vpadding, target_img.shape[0] - target_img_vpadding):
+            for col in range(target_img_hpadding, target_img.shape[1] - target_img_hpadding):
+                for channel in range(0, target_img.shape[2]):
+                    output = self.threshold_detection(target_img[row-target_img_vpadding:row+target_img_vpadding+1,
+                                                        col-target_img_hpadding:col+target_img_hpadding+1, channel], self.ref_img, self.threshold)
+                    
+                    if output == 255:
+                        start_point = (row-target_img_hpadding, col-target_img_vpadding)    # X, Y coordinates of top-left corner
+                        end_point = (row+target_img_hpadding, col+target_img_vpadding)    # X, Y coordinates of bottom-right corner
+
+                        # Specify the color of the rectangle as BGR values
+                        color = (100)       # green
+                        
+                        # Specify the thickness of the lines used to draw the rectangle
+                        thickness = 2
+                        
+                        # Draw the rectangle on the input image using cv2.rectangle()
+                        cv2.rectangle(img, start_point, end_point, color, thickness)
+                    
+                    img[row, col, channel] = output
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        
+        return output, self.class_name
+    
+    @staticmethod
+    def threshold_detection(self, target_img, ref_img, threshold):
+        if self.histogram_chi_difference(target_img, ref_img) < threshold:
+            return 255
+        else:
+            return 0
+    
+    @staticmethod
+    def histogram_chi_difference(self, target_img, ref_img):
+        hist_x = self.hog_histogram(target_img)
+        hist_y = self.hog_histogram(ref_img)
+        
+        num = (hist_x - hist_y) ** 2
+        denom = hist_x + hist_y + 1e-6
+        diff = 0.5 * np.sum(num / denom)
+        return diff
+        
+    @staticmethod
+    def hog_histogram(self, img):
+         # Calculate x and y gradients using Sobel operator
+        gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=1)
+        gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=1)
+        # Calculate magnitude and angle of gradients
+        _, angle = cv2.cartToPolar(gx, gy, angleInDegrees=True)
+
+        # Build histogram for angles
+        hist, bins = np.histogram(angle, bins=9, range=(0., 180.))
+        
+        return hist, bins
+        
     
 class Erosion:
     def __init__(self):
@@ -260,85 +327,6 @@ class Trimmed_Median:
 
         return np.mean(sorted_pixels[left_index:right_index])
 
-class Segmentation_Filter:
-    def __init__(self, alpha=0.3, k=0.34, R=128):
-        self.class_name = self.__class__.__name__
-        self.alpha = alpha
-        self.k = k
-        self.R = R
-    
-    @staticmethod
-    @jit(nopython=True)
-    def Niblack(window, center_index, k=-0.2):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window)
-        stds = np.std(window)
-
-        thresholds = means + k * stds
-
-        if window[center_index, center_index] > thresholds:
-            return 255
-        else:
-            return 0
-
-    @staticmethod
-    @jit(nopython=True)
-    def Sauvola(window, center_index, k=0.34, R=128):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window)
-        stds = np.std(window)
-
-        # Compute the local threshold for each channel
-        thresholds = means * (1.0 + k * (-1 + stds / R))
-
-        if window[center_index, center_index] > thresholds:
-            return 255
-        else:
-            return 0
-        
-    @staticmethod
-    @jit(nopython=True)
-    def Bernsen(window, center_index):
-        # Compute the mean and standard deviation for each channel separately
-        maxs = np.max(window['img_window'])
-        mins = np.min(window['img_window'])
-
-        thresholds = (maxs + mins)/2
-        if window[center_index, center_index] > thresholds:
-            return 255
-        else:
-            return 0
-
-    def apply(self, img, window_size, func_type='Sauvola'):
-        # Takes Niblack, Sauvola, and Bernsen filter functions
-
-        img = np.copy(img)
-        # Calculate the padding size based on the window size
-        padding_size = window_size // 2
-
-        # Pad the image with zeros
-        padded_image = np.pad(img, ((padding_size, padding_size),
-                                    (padding_size, padding_size), (0, 0)), mode='constant')
-
-        if func_type == 'Niblack':
-            func = partial(Segmentation_Filter.Niblack, k = self.k)
-        elif func_type == 'Sauvola':
-            func = partial(Segmentation_Filter.Sauvola, k=self.k, R=self.R)
-        else:
-            func = partial(Segmentation_Filter.Bernsen)
-
-        output = np.zeros_like(img)
-        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size)
-                    for row in range(padding_size, padded_image.shape[0] - padding_size)
-                    for col in range(padding_size, padded_image.shape[1] - padding_size)
-                    for channel in range(0, img.shape[2])]
-        
-        output = np.array(output).reshape(img.shape)
-
-        output = np.clip(output, 0, 255).astype(np.uint8)
-
-        return output, self.class_name
-        
 class Tilation(ImageUtil):
     # Takes Pillow Objects
     def __init__(self, img=np.full((5, 5), 1), name='default', hist=True):

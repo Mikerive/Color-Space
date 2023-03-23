@@ -7,7 +7,7 @@ from numba import jit
 from .imageutils import ImagePlotter, ImageUtil
 from .ImageProcessing import Tilation
 
-__all__ = ['Segment', 'Adaptive_Multiple_Threshold',
+__all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'pixels_above_threshold',
            'Adaptive_Global_Threshold', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
            'Tiled_Adaptive_Threshold_Segmentation', 'ImageSegment']
 
@@ -128,6 +128,20 @@ class Global_Threshold(Segment):
             title=f'Threshold value: {self.threshold_value}')
 
         return output, self.class_name
+    
+class pixels_above_threshold(Segment):
+    def __init__(self, threshold_value):
+        self.class_name = self.__class__.__name__
+        self.threshold_value = threshold_value
+        
+    def apply(self, img):
+        img[img < self.threshold_value] = 0
+        
+        # Display the output image
+        ImagePlotter(img).plot_image(
+            title=f'Filter value: {self.threshold_value}')
+
+        return img, self.class_name
 
 class Adaptive_Global_Threshold(Segment):
     """
@@ -177,18 +191,23 @@ class Adaptive_Global_Threshold(Segment):
         return mask2, self.class_name
 
 class Pixel_Filter(Segment):
-    def __init__(self, window_size, func_type='Sauvola', hist = False):
+    def __init__(self, window_size, intra_std, func_type='Sauvola', hist = False):
         self.class_name = self.__class__.__name__
         self.window_size = window_size
         self.func_type = func_type
         self.hist = hist
+        self.intra_std = intra_std
     
     @staticmethod
     @jit(nopython=True)
-    def Niblack(window, padding_size, k=-0.2):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window)
+    def Niblack(window, padding_size, diff, k=-0.2):
+        
         stds = np.std(window)
+        
+        if diff > (np.max(window) - np.min(window)):
+            return 0
+        
+        means = np.mean(window)
 
         thresholds = means + k * stds
 
@@ -199,11 +218,17 @@ class Pixel_Filter(Segment):
 
     @staticmethod
     @jit(nopython=True)
-    def Sauvola(window, padding_size, k=0.34, R=128):
-        # Compute the mean and standard deviation for each channel separately
-        means = np.mean(window)
-        stds = np.std(window)
+    def Sauvola(window, padding_size, diff, k=0.34, R=128):
+        
 
+        
+        # If the variance isn't great enough, consider it background.
+        if diff > (np.max(window) - np.min(window)):
+            return 0
+        
+        stds = np.std(window)
+        means = np.mean(window)
+        
         # Compute the local threshold for each channel
         thresholds = means * (1.0 + k * (-1 + stds / R))
 
@@ -214,8 +239,12 @@ class Pixel_Filter(Segment):
 
     @staticmethod
     @jit(nopython=True)
-    def Bernsen(window, padding_size):
-        # Compute the mean and standard deviation for each channel separately
+    def Bernsen(window, padding_size, diff):
+        stds = np.std(window)
+        
+        if diff > (np.max(window) - np.min(window)):
+            return 0
+        
         maxs = np.max(window)
         mins = np.min(window)
 
@@ -244,7 +273,7 @@ class Pixel_Filter(Segment):
             func = self.Bernsen
 
         output = np.zeros_like(img)
-        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size)
+        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size, self.intra_std)
                   for row in range(padding_size, padded_image.shape[0] - padding_size)
                   for col in range(padding_size, padded_image.shape[1] - padding_size)
                   for channel in range(0, img.shape[2])]

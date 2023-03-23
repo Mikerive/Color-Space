@@ -3,15 +3,16 @@ from .imageutils import ImageUtil, ImagePlotter
 import numpy as np
 from numba import jit
 
-__all__ = ['MultiProcessor', 'Gradient_Magnitude', 'Gradient_Direction', 'Difference', 'Sum']
+__all__ = ['MultiProcessor', 'ImageMultiProcessor','Gradient_Magnitude', 'Gradient_Direction', 'Difference', 'Sum']
 
 
 class MultiProcessor:
-    def __init__(self, image1_path, image2_path, folder_name, output_name, hist = False):
+    def __init__(self, image1_path, image2_path, folder_name, output_name, plot = True, hist = False):
         self.image1_path = image1_path
         self.image2_path = image2_path
         self.folder_name = folder_name
         self.img_name = output_name
+        self.plot = plot
         self.hist = hist
     
     def process(self, operator):
@@ -36,13 +37,35 @@ class MultiProcessor:
         path = ImageUtil(output).save_image_to_folder(
             f'Image/{self.folder_name}/', f"{self.img_name}.png")
         
-        if self.hist == True:
-            ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}')
-            
-        else:
-            ImagePlotter(output).plot_image(f'{self.img_name}')
+        if self.plot == True:   
+            if self.hist == True:
+                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}')
+                
+            else:
+                ImagePlotter(output).plot_image(f'{self.img_name}')
         
         return output, path
+    
+class ImageMultiProcessor:
+    def __init__(self, image1, image2):
+        self.image1 = image1
+        self.image2 = image2
+    
+    def process(self, operator):
+        image1 = np.array(self.image1)
+        image2 = np.array(self.image2)
+        
+        if image1.ndim == 2:
+            image1 = np.expand_dims(image1, axis=2)
+            
+        if image2.ndim == 2:
+            image2 = np.expand_dims(image2, axis=2)
+        
+        # Apply the operator to the input image
+        output = operator.apply(image1, image2)
+        
+        output = np.clip(output, 0, 255).astype(np.uint8)
+        return output
 
 
 class Gradient_Magnitude:
@@ -72,16 +95,22 @@ class Gradient_Direction:
         return ((angle + np.pi) * 255.0 / (2 * np.pi))
     
 class Difference:
-    def __init__(self, ratio = [1,1]):
-        self.ratio = ratio
+    def __init__(self):
+        pass
     def apply(self, himg, vimg):
-        return himg * self.ratio[0] - vimg * self.ratio[1]
+        return himg - vimg
     
 class Sum:
-    def __init__(self, ratio = [1,1]):
-        self.ratio = ratio
+    def __init__(self):
+        pass
     def apply(self, himg, vimg):
-        return himg * self.ratio[0] + vimg * self.ratio[1]
+        return himg + vimg
+    
+class Multiply:
+    def __init__(self):
+        pass
+    def apply(self, himg, vimg):
+        return himg * vimg
         
 def hough_transform(img_bin, theta_res=1, rho_res=1):
     h, w = img_bin.shape
