@@ -9,9 +9,7 @@ __all__ = ["ImageUtil", "ImagePlotter", "MultiPlotter"]
 class ImageUtil:
     # Deals with PIL objects
     
-    def __init__(self, img = None):
-        if img is None:
-            img = np.full((10,10), 1)
+    def __init__(self, img):
         self.img = np.uint8(img)
     
     def save_image_to_folder(self, folder_name, filename):
@@ -31,10 +29,11 @@ class ImageUtil:
             mode = 'RGBA'
         else:
             raise ValueError('Unsupported image format')
+        
+        
         if mode == 'RGB':
             pil_img = Image.fromarray(self.img)
         elif mode == 'L':
-            
             pil_img = Image.fromarray(self.img, mode=mode)
         elif mode == 'RGBA':
             pil_img = Image.fromarray(self.img, mode=mode)

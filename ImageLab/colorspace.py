@@ -4,22 +4,30 @@ import numpy as np
 from .imageutils import ImagePlotter, ImageUtil
 
 
-__all__ = ['ColorSpace', 'bgr_to_rgb', 'rgb_to_grayscale', 'inversion', 'rgb_to_HSV']
+__all__ = ['ColorSpace', 'ImageColorSpace', 'bgr_to_rgb', 'rgb_to_grayscale', 'inversion', 'rgb_to_HSV']
 
 
 class ColorSpace:
-    def __init__(self, image_path, folder_name, img_name, plot = False, hist = False, save_image = True):
+    def __init__(self, image_path, folder_name = 'default', img_name = 'default', save_image = True, plot = False, hist = False):
         self.image_path = image_path
-        self.folder_name = folder_name
-        self.img_name = img_name
-        self.hist = hist
+        
         self.plot = plot
+        if plot == True:
+            self.hist = hist
+            self.plot = plot
+            
+        
         self.save_image = save_image
+        if save_image == True:
+            self.save_image = save_image
+            self.folder_name = folder_name
+            self.img_name = img_name
+            
     
     def process(self, operator):
         
         image = Image.open(self.image_path)
-        image_array = np.array(image)
+        image_array = np.array(image).astype(np.uint16)
         
         if image_array.ndim == 2:
             image_array = np.expand_dims(image_array, axis=2)
@@ -62,10 +70,10 @@ class ImageColorSpace:
         
         if self.plot == True:
             if self.hist == True:
-                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image_with_histogram(f'{class_name}')
                 
             else:
-                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image(f'{class_name}')
         
         return output
     
@@ -87,7 +95,7 @@ class rgb_to_grayscale:
 
     def apply(self, img):
         gray_image = np.dot(img[..., :3], self.ratio)
-        gray_image = np.clip(gray_image, 0, 255).astype(np.int)
+        gray_image = np.clip(gray_image, 0, 255).astype(np.int8)
         return gray_image, self.class_name
 
 class inversion:

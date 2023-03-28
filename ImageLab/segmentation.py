@@ -12,7 +12,7 @@ __all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'pixels_above_threshold',
            'Tiled_Adaptive_Threshold_Segmentation', 'ImageSegment']
 
 class Segment:
-    def __init__(self, image_path, folder_name, img_name, plot = False, hist = False, save_image = True):
+    def __init__(self, image_path, folder_name = 'default', img_name = 'default', plot = False, hist = False, save_image = True):
         self.image_path = image_path
         self.folder_name = folder_name
         self.img_name = img_name
@@ -60,22 +60,23 @@ class ImageSegment:
         
         if self.plot == True:
             if self.hist == True:
-                ImagePlotter(output).plot_image_with_histogram(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image_with_histogram(f'{class_name}')
             else:
-                ImagePlotter(output).plot_image(f'{self.img_name}_{class_name}')
+                ImagePlotter(output).plot_image(f'{class_name}')
 
         return output
     
         
 
 class Adaptive_Multiple_Threshold(Segment):
-    def __init__(self, distance=10, width=8):
+    def __init__(self, distance=10, width=8, plot = False):
         self.class_name = self.__class__.__name__
         self.distance = distance
         self.width = width
+        self.plot = plot
     def apply(self, img):
         # Calculate the histogram of the image
-        hist, bins = np.histogram(img.flatten(), bins=256, range=(0, 255))
+        hist, _ = np.histogram(img.flatten(), bins=256, range=(0, 255))
 
         # Find the peaks in the histogram using the find_peaks function from SciPy
         from scipy.signal import find_peaks
@@ -100,32 +101,35 @@ class Adaptive_Multiple_Threshold(Segment):
         for r in ranges:
             # Values within the range arr assigned 255, the rest 0
             mask = np.zeros_like(img)
-            mask[(self.img >= r[0]) & (self.img <= r[1])] = 255
+            mask[(img >= r[0]) & (img <= r[1])] = 255
             masks.append(mask)
+            
+        if self.plot == True:
+            # Show the original image and its histogram
+            ImagePlotter(img).plot_image_with_histogram(
+                title=f'{self.img_name}')
 
-        # Show the original image and its histogram
-        ImagePlotter(img).plot_image_with_histogram(
-            title=f'{self.img_name}')
-
-        # Show the identified objects
-        for i in range(len(masks)):
-            ImagePlotter(masks[i]).plot_image(title=f'mask {ranges[i][0]}:{ranges[i][1]}')
+            # Show the identified objects
+            for i in range(len(masks)):
+                ImagePlotter(masks[i]).plot_image(title=f'mask {ranges[i][0]}:{ranges[i][1]}')
 
         return masks, self.class_name
 
 class Global_Threshold(Segment):
-    def __init__(self, threshold_value):
+    def __init__(self, threshold_value, plot = False):
         self.class_name = self.__class__.__name__
         self.threshold_value = threshold_value
+        self.plot = plot
 
     def apply(self, img):
 
         # Apply thresholding
         output = (img > self.threshold_value).astype(np.uint8) * 255
-
-        # Display the output image
-        ImagePlotter(output).plot_image(
-            title=f'Threshold value: {self.threshold_value}')
+        
+        if self.plot == True:
+            # Display the output image
+            ImagePlotter(output).plot_image(
+                title=f'Threshold value: {self.threshold_value}')
 
         return output, self.class_name
     
@@ -191,10 +195,11 @@ class Adaptive_Global_Threshold(Segment):
         return mask2, self.class_name
 
 class Pixel_Filter(Segment):
-    def __init__(self, window_size, intra_std, func_type='Sauvola', hist = False):
+    def __init__(self, window_size, intra_std, func_type='Sauvola', plot = False, hist = False):
         self.class_name = self.__class__.__name__
         self.window_size = window_size
         self.func_type = func_type
+        self.plot = plot
         self.hist = hist
         self.intra_std = intra_std
     
@@ -263,8 +268,6 @@ class Pixel_Filter(Segment):
         padded_image = np.pad(img, ((padding_size, padding_size),
                               (padding_size, padding_size), (0, 0)), mode='constant')
 
-        print(padded_image.shape)
-
         if self.func_type == 'Niblack':
             func = self.Niblack
         elif self.func_type == 'Sauvola':
@@ -281,8 +284,9 @@ class Pixel_Filter(Segment):
         output = np.array(output).reshape(img.shape)
 
         output = np.clip(output, 0, 255).astype(np.uint8)
-
-        ImagePlotter(output).plot_image(title=f'{self.func_type}')
+        
+        if self.plot == True:
+            ImagePlotter(output).plot_image(title=f'{self.func_type}')
 
         return output, self.class_name
 

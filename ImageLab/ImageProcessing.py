@@ -12,7 +12,7 @@ from functools import partial
 __all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion', 'Tilation']
 
 class Processor:
-    def __init__(self, image_path, folder_name, img_name, hist = False, plot = False, save_image = True):
+    def __init__(self, image_path, folder_name = 'default', img_name='default.png', hist = False, plot = False, save_image = True):
         self.image_path = image_path
         self.folder_name = folder_name
         self.img_name = img_name
@@ -109,77 +109,6 @@ class Convolution:
     def weighted_arithmetic_mean(sub_image, weight_matrix):
         return np.sum(np.multiply(sub_image, weight_matrix))
     
-class HOG:
-    def __init__(self, ref_img, threshold):
-        self.ref_img = ref_img
-        self.threshold = threshold
-        self.class_name = self.__class__.__name__
-    
-    @staticmethod
-    def apply(self, target_img):
-        
-        target_img_hpadding = self.ref_img.shape[0] // 2
-        target_img_vpadding = self.ref_img.shape[1] // 2
-        
-        
-        img = np.zeros_like(target_img)
-        # nested for-loop version of the code
-        for row in range(target_img_vpadding, target_img.shape[0] - target_img_vpadding):
-            for col in range(target_img_hpadding, target_img.shape[1] - target_img_hpadding):
-                for channel in range(0, target_img.shape[2]):
-                    output = self.threshold_detection(target_img[row-target_img_vpadding:row+target_img_vpadding+1,
-                                                        col-target_img_hpadding:col+target_img_hpadding+1, channel], self.ref_img, self.threshold)
-                    
-                    if output == 255:
-                        start_point = (row-target_img_hpadding, col-target_img_vpadding)    # X, Y coordinates of top-left corner
-                        end_point = (row+target_img_hpadding, col+target_img_vpadding)    # X, Y coordinates of bottom-right corner
-
-                        # Specify the color of the rectangle as BGR values
-                        color = (100)       # green
-                        
-                        # Specify the thickness of the lines used to draw the rectangle
-                        thickness = 2
-                        
-                        # Draw the rectangle on the input image using cv2.rectangle()
-                        cv2.rectangle(img, start_point, end_point, color, thickness)
-                    
-                    img[row, col, channel] = output
-        
-        output = np.clip(output, 0, 255).astype(np.uint8)
-        
-        return output, self.class_name
-    
-    @staticmethod
-    def threshold_detection(self, target_img, ref_img, threshold):
-        if self.histogram_chi_difference(target_img, ref_img) < threshold:
-            return 255
-        else:
-            return 0
-    
-    @staticmethod
-    def histogram_chi_difference(self, target_img, ref_img):
-        hist_x = self.hog_histogram(target_img)
-        hist_y = self.hog_histogram(ref_img)
-        
-        num = (hist_x - hist_y) ** 2
-        denom = hist_x + hist_y + 1e-6
-        diff = 0.5 * np.sum(num / denom)
-        return diff
-        
-    @staticmethod
-    def hog_histogram(self, img):
-         # Calculate x and y gradients using Sobel operator
-        gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=1)
-        gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=1)
-        # Calculate magnitude and angle of gradients
-        _, angle = cv2.cartToPolar(gx, gy, angleInDegrees=True)
-
-        # Build histogram for angles
-        hist, bins = np.histogram(angle, bins=9, range=(0., 180.))
-        
-        return hist, bins
-        
-    
 class Erosion:
     def __init__(self):
         self.class_name = self.__class__.__name__
@@ -216,9 +145,6 @@ class Erosion:
         # Pad the image with zeros
         padded_image = np.array(np.pad(img, ((
             padding_size, padding_size), (padding_size, padding_size), (0, 0)), mode='constant', constant_values=255))
-
-        
-
 
         output = [Erosion.min(padded_image[row-padding_size:row+padding_size+1,
                                                         col-padding_size:col+padding_size+1, channel], k_matrix)
@@ -382,6 +308,7 @@ class Tilation(ImageUtil):
             'width': width,
         }
         self.section_dict = section_dict
+        self.section_list = section_list
         return section_list, section_dict
 
     def merge_sections_into_image(self, section_list, section_dict):
@@ -413,18 +340,18 @@ class Tilation(ImageUtil):
 
     def apply_function_nxn_sections(self, func1=func_pass, func2=func_pass, func3=func_pass, *args):
 
-        L, A, B = cv2.split(self.section_dict['section_list'])
+        L, A, B = cv2.split(self.section_list)
 
         L = [func1(section[:, :, 0], *args)
-             for section in self.section_dict['section_list']]
+             for section in self.section_list]
         A = [func2(section[:, :, 1], *args)
-             for section in self.section_dict['section_list']]
+             for section in self.section_list]
         B = [func3(section[:, :, 2], *args)
-             for section in self.section_dict['section_list']]
+             for section in self.section_list]
 
         # Apply the functions to each section
         results = [function(section, *args)
-                   for section in self.section_dict['section_list']]
+                   for section in self.section_list]
 
         # Return the output
         return {
@@ -437,15 +364,15 @@ class Tilation(ImageUtil):
 
     def show_image_sections(self):
         # Calculate the number of rows and columns for the plot
-        n_rows = int(np.sqrt(len(self.section_dict['section_list'])))
-        n_cols = int(np.ceil(len(self.section_dict['section_list']) / n_rows))
+        n_rows = int(np.sqrt(len(self.section_list)))
+        n_cols = int(np.ceil(len(self.section_list) / n_rows))
 
         # Create a figure with subplots
         fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
         ax = ax.ravel()
 
         # Plot each section in its own subplot
-        for i, section in enumerate(self.section_dict['section_list']):
+        for i, section in enumerate(self.section_list):
             ax[i].imshow(section)
             ax[i].axis('off')
 
