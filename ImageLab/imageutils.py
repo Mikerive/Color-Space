@@ -9,8 +9,8 @@ __all__ = ["ImageUtil", "ImagePlotter", "MultiPlotter"]
 class ImageUtil:
     # Deals with PIL objects
     
-    def __init__(self, img):
-        self.img = np.uint8(img)
+    def __init__(self, img = np.full((1,1), 1)):
+        self.img = np.uint8(np.array(img))
     
     def save_image_to_folder(self, folder_name, filename):
         # Create the folder if it doesn't exist

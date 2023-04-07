@@ -5,11 +5,11 @@ from numba import jit
 
 
 from .imageutils import ImagePlotter, ImageUtil
-from .ImageProcessing import Tilation
+# from .ImageProcessing import Tilation
 
 __all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'pixels_above_threshold',
            'Adaptive_Global_Threshold', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
-           'Tiled_Adaptive_Threshold_Segmentation', 'ImageSegment']
+           'ImageSegment']
 
 class Segment:
     def __init__(self, image_path, folder_name = 'default', img_name = 'default', plot = False, hist = False, save_image = True):
@@ -326,42 +326,42 @@ class Global_Multiple_Threshold(Segment):
 
         return masks, self.class_name
 
-class Tiled_Adaptive_Threshold_Segmentation(Segment):
-    def __init__(self, n=2, background_difference=5, deltaT=3):
-        self.class_name = self.__class__.__name__
-        self.n = n
-        self.background_difference=background_difference
-        self.deltaT = deltaT
+# class Tiled_Adaptive_Threshold_Segmentation(Segment):
+#     def __init__(self, n=2, background_difference=5, deltaT=3):
+#         self.class_name = self.__class__.__name__
+#         self.n = n
+#         self.background_difference=background_difference
+#         self.deltaT = deltaT
 
-    def apply(self, image):
-        sections, image_dict = Tilation(image).split_image_nxn_sections(self.n)
-        for i, image in enumerate(sections):
-            for layer in range(image.shape[2]):
+#     def apply(self, image):
+#         sections, image_dict = Tilation(image).split_image_nxn_sections(self.n)
+#         for i, image in enumerate(sections):
+#             for layer in range(image.shape[2]):
 
-                img_layer = image[:, :, layer]
+#                 img_layer = image[:, :, layer]
 
-                # Don't Segment if background
-                if np.max(image) - np.min(image) < self.background_difference:
-                    sections[i][:, :,layer] = np.full(img_layer.shape, 255)
-                else:
-                    threshold = (np.max(image)+np.min(image))//2
-                    # If T is within three pixels of the last T, update and terminate while loop
-                    done = False
-                    while done == False:
-                        img1, img2 = np.zeros_like(image), np.zeros_like(image)
-                        img1, img2 = image[image <
-                                           threshold], image[image > threshold]
-                        thresholdnext = (np.mean(img1)+np.mean(img2))//2
-                        if abs(thresholdnext-threshold) < self.deltaT:
-                            done = True
-                        threshold = thresholdnext
+#                 # Don't Segment if background
+#                 if np.max(image) - np.min(image) < self.background_difference:
+#                     sections[i][:, :,layer] = np.full(img_layer.shape, 255)
+#                 else:
+#                     threshold = (np.max(image)+np.min(image))//2
+#                     # If T is within three pixels of the last T, update and terminate while loop
+#                     done = False
+#                     while done == False:
+#                         img1, img2 = np.zeros_like(image), np.zeros_like(image)
+#                         img1, img2 = image[image <
+#                                            threshold], image[image > threshold]
+#                         thresholdnext = (np.mean(img1)+np.mean(img2))//2
+#                         if abs(thresholdnext-threshold) < self.deltaT:
+#                             done = True
+#                         threshold = thresholdnext
 
-                    # Create a binary mask by comparing the image with the threshold value
-                    mask = np.zeros_like(img_layer)
+#                     # Create a binary mask by comparing the image with the threshold value
+#                     mask = np.zeros_like(img_layer)
 
-                    mask[img_layer >= threshold] = 255
-                    sections[i][:, :, layer] = np.clip(
-                        mask, 0, 255).astype(np.uint8)
+#                     mask[img_layer >= threshold] = 255
+#                     sections[i][:, :, layer] = np.clip(
+#                         mask, 0, 255).astype(np.uint8)
 
-        Tilation(name=f'adaptive_seg_{self.n}:{self.background_difference}').merge_sections_into_image(image_dict)
-        return image, self.class_name
+#         Tilation(name=f'adaptive_seg_{self.n}:{self.background_difference}').merge_sections_into_image(image_dict)
+#         return image, self.class_name

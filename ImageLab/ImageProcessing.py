@@ -9,7 +9,7 @@ from PIL import Image
 import inspect
 from functools import partial
 
-__all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion', 'Tilation']
+__all__ = ['ImageProcessor', 'Processor', 'Convolution', 'Dilation', 'Erosion']
 
 class Processor:
     def __init__(self, image_path, folder_name = 'default', img_name='default.png', hist = False, plot = False, save_image = True):
@@ -253,128 +253,128 @@ class Trimmed_Median:
 
         return np.mean(sorted_pixels[left_index:right_index])
 
-class Tilation(ImageUtil):
-    # Takes Pillow Objects
-    def __init__(self, img=np.full((5, 5), 1), name='default', hist=True):
-        self.img = img
-        self.section_dict = None
-        self.image_name = name
-        self.hist = hist
+# class Tilation(ImageUtil):
+#     # Takes Pillow Objects
+#     def __init__(self, img=np.full((5, 5), 1), name='default', hist=True):
+#         self.img = img
+#         self.section_dict = None
+#         self.image_name = name
+#         self.hist = hist
         
-        # If 2d, make 3d
-        if (self.img.ndim == 2):
-            self.img = np.expand_dims(self.img, axis=2)
+#         # If 2d, make 3d
+#         if (self.img.ndim == 2):
+#             self.img = np.expand_dims(self.img, axis=2)
 
-    def split_image_nxn_sections(self, sections):
+#     def split_image_nxn_sections(self, sections):
 
-        # Get the size of the image
-        height, width = self.img.shape[:2]
+#         # Get the size of the image
+#         height, width = self.img.shape[:2]
 
-        layers = 0
+#         layers = 0
 
-        if len(self.img.shape) == 2:
-            layers = 1
-        else:
-            layers = self.img.shape[2]
+#         if len(self.img.shape) == 2:
+#             layers = 1
+#         else:
+#             layers = self.img.shape[2]
 
-        # Calculate the height of each section
-        section_height = int(np.ceil(height / sections))
+#         # Calculate the height of each section
+#         section_height = int(np.ceil(height / sections))
 
-        # Calculate the width of each section
-        section_width = int(np.ceil(width / sections))
+#         # Calculate the width of each section
+#         section_width = int(np.ceil(width / sections))
 
-        # Initialize the list to store the sections
-        section_list = []
+#         # Initialize the list to store the sections
+#         section_list = []
 
-        if layers == 1:
-            # Split the image into sections
-            for row in range(0, height, section_height):
-                for col in range(0, width, section_width):
-                    section = self.img[row:row + section_height,
-                                       col:col + section_width]
-                    section_list.append(section)
-        else:
-            # Split the image into sections
-            for row in range(0, height, section_height):
-                for col in range(0, width, section_width):
-                    section = self.img[row:row + section_height, col:col + section_width, :]
-                    section_list.append(section)
+#         if layers == 1:
+#             # Split the image into sections
+#             for row in range(0, height, section_height):
+#                 for col in range(0, width, section_width):
+#                     section = self.img[row:row + section_height,
+#                                        col:col + section_width]
+#                     section_list.append(section)
+#         else:
+#             # Split the image into sections
+#             for row in range(0, height, section_height):
+#                 for col in range(0, width, section_width):
+#                     section = self.img[row:row + section_height, col:col + section_width, :]
+#                     section_list.append(section)
 
-        # Return the output wrapped in a dictionary
-        section_dict = {
-            'section_height': section_height,
-            'section_width': section_width,
-            'height': height,
-            'width': width,
-        }
-        self.section_dict = section_dict
-        self.section_list = section_list
-        return section_list, section_dict
+#         # Return the output wrapped in a dictionary
+#         section_dict = {
+#             'section_height': section_height,
+#             'section_width': section_width,
+#             'height': height,
+#             'width': width,
+#         }
+#         self.section_dict = section_dict
+#         self.section_list = section_list
+#         return section_list, section_dict
 
-    def merge_sections_into_image(self, section_list, section_dict):
-        # Get the number of channels from the first section
-        num_channels = section_list[0].shape[2]
+#     def merge_sections_into_image(self, section_list, section_dict):
+#         # Get the number of channels from the first section
+#         num_channels = section_list[0].shape[2]
 
-        # Initialize the result image with the correct number of channels
-        result_img = np.zeros(
-            (section_dict['height'], section_dict['width'], num_channels), dtype=np.uint8)
+#         # Initialize the result image with the correct number of channels
+#         result_img = np.zeros(
+#             (section_dict['height'], section_dict['width'], num_channels), dtype=np.uint8)
 
-        # Merge the sections into a single image
-        index = 0
-        for row in range(0, section_dict['height'], section_dict['section_height']):
-            for col in range(0, section_dict['width'], section_dict['section_width']):
-                section = section_dict['section_list'][index]
-                result_img[row:row + section_dict['section_height'],
-                           col:col + section_dict['section_width'], :] = section
-                index += 1
+#         # Merge the sections into a single image
+#         index = 0
+#         for row in range(0, section_dict['height'], section_dict['section_height']):
+#             for col in range(0, section_dict['width'], section_dict['section_width']):
+#                 section = section_dict['section_list'][index]
+#                 result_img[row:row + section_dict['section_height'],
+#                            col:col + section_dict['section_width'], :] = section
+#                 index += 1
 
-        if self.hist == True:
-            ImagePlotter(result_img).plot_image_with_histogram(
-                title=f'{self.image_name}')
-        else:
-            ImagePlotter(result_img).plot_image(
-                title=f'{self.image_name}')
-        return result_img
+#         if self.hist == True:
+#             ImagePlotter(result_img).plot_image_with_histogram(
+#                 title=f'{self.image_name}')
+#         else:
+#             ImagePlotter(result_img).plot_image(
+#                 title=f'{self.image_name}')
+#         return result_img
 
-    def func_pass(x): return x
+#     def func_pass(x): return x
 
-    def apply_function_nxn_sections(self, func1=func_pass, func2=func_pass, func3=func_pass, *args):
+#     def apply_function_nxn_sections(self, func1=func_pass, func2=func_pass, func3=func_pass, *args):
 
-        L, A, B = cv2.split(self.section_list)
+#         L, A, B = cv2.split(self.section_list)
 
-        L = [func1(section[:, :, 0], *args)
-             for section in self.section_list]
-        A = [func2(section[:, :, 1], *args)
-             for section in self.section_list]
-        B = [func3(section[:, :, 2], *args)
-             for section in self.section_list]
+#         L = [func1(section[:, :, 0], *args)
+#              for section in self.section_list]
+#         A = [func2(section[:, :, 1], *args)
+#              for section in self.section_list]
+#         B = [func3(section[:, :, 2], *args)
+#              for section in self.section_list]
 
-        # Apply the functions to each section
-        results = [function(section, *args)
-                   for section in self.section_list]
+#         # Apply the functions to each section
+#         results = [function(section, *args)
+#                    for section in self.section_list]
 
-        # Return the output
-        return {
-            'section_list': results,
-            'section_height': self.section_dict['section_height'],
-            'section_width': self.section_dict['section_width'],
-            'height': self.section_dict['height'],
-            'width': self.section_dict['width'],
-        }
+#         # Return the output
+#         return {
+#             'section_list': results,
+#             'section_height': self.section_dict['section_height'],
+#             'section_width': self.section_dict['section_width'],
+#             'height': self.section_dict['height'],
+#             'width': self.section_dict['width'],
+#         }
 
-    def show_image_sections(self):
-        # Calculate the number of rows and columns for the plot
-        n_rows = int(np.sqrt(len(self.section_list)))
-        n_cols = int(np.ceil(len(self.section_list) / n_rows))
+#     def show_image_sections(self):
+#         # Calculate the number of rows and columns for the plot
+#         n_rows = int(np.sqrt(len(self.section_list)))
+#         n_cols = int(np.ceil(len(self.section_list) / n_rows))
 
-        # Create a figure with subplots
-        fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
-        ax = ax.ravel()
+#         # Create a figure with subplots
+#         fig, ax = plt.subplots(n_rows, n_cols, figsize=(10, 10))
+#         ax = ax.ravel()
 
-        # Plot each section in its own subplot
-        for i, section in enumerate(self.section_list):
-            ax[i].imshow(section)
-            ax[i].axis('off')
+#         # Plot each section in its own subplot
+#         for i, section in enumerate(self.section_list):
+#             ax[i].imshow(section)
+#             ax[i].axis('off')
 
-        plt.tight_layout()
-        plt.show()
+#         plt.tight_layout()
+#         plt.show()
