@@ -18,11 +18,35 @@ Calculate Edge Direction map using fourier edge map.
 import cv2
 import numpy as np
 import os
-import mahotas as mh
+from skimage.filters import (threshold_sauvola)
+# import mahotas as mh
+
+
+def sauvola_threshold(image, window_size=15, k=0.2):
+    """
+    Apply binary thresholding to an image based on Sauvola's adaptive method.
+    :param image: numpy array representing the image.
+    :param window_size: the size of the window used for calculating the threshold.
+    :return: binary image with pixel values equal to 0 or 1.
+    """
+    binary_image = np.zeros_like(image)
+
+    # calculate Sauvola threshold
+    threshold = threshold_sauvola(image, window_size=window_size, k=k)
+
+    # apply binary thresholding based on Sauvola threshold
+    binary_image[image < threshold] = 255
+    return binary_image.astype('uint8')
+
+# def sauvola_threshold(image, window_size = 12, k=0.2):
+#     thresh_sauvola = cv2.ximgproc.niBlackThreshold(image, maxValue=255, type=cv2.THRESH_BINARY_INV, blockSize=window_size, k=k)
+#     binary_sauvola = np.zeros_like(image)
+#     binary_sauvola[image >= thresh_sauvola] = 255
+#     binary_sauvola = cv2.bitwise_not(binary_sauvola)
+#     return binary_sauvola
 
 
 #RGB Contrast Stretch
-
 def rgb_contrast_stretch(img):
     '''
     Apply contrast stretch on the input RGB image
@@ -40,7 +64,8 @@ def rgb_contrast_stretch(img):
 
     return result
 
-def green_and_red_filter(cv_image: np.ndarray, ratio: float):
+# This is a better filter in sunny images. In the afternoon, the sun redens and makes the filter remove too much red pixels.
+def green_and_red_filter(cv_image: np.ndarray, ratio: float, kernel_size = 12):
     # Get the green, red, and blue values of all pixels
     bgr_values = cv_image[..., :3]
 
@@ -51,9 +76,13 @@ def green_and_red_filter(cv_image: np.ndarray, ratio: float):
     red_blue_ratios = bgr_values[..., 2] / bgr_values[..., 0]
 
     # Set pixels with ratio greater than ratio to white
-    white_mask = (green_blue_ratios > ratio) & (red_blue_ratios > ratio)
-    cv_image[white_mask] = (255, 255, 255)
+    white_mask = (green_blue_ratios > ratio) # | (red_blue_ratios > ratio)
+      # Apply a kernel to compute the mean value of the kernel area
+    kernel = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size * kernel_size)
+    mean_filtered_image = cv2.filter2D(cv_image, -1, kernel)
 
+    # Replace pixels that meet the ratio criteria with the mean value of the kernel area
+    cv_image[white_mask] = mean_filtered_image[white_mask]
     return cv_image
 
 def bgr_to_gray(image):
@@ -63,7 +92,6 @@ def bgr_to_gray(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return gray_image
 
-
 def adaptive_threshold(image):
     """
     Apply adaptive global thresholding on a grayscale image.
@@ -72,7 +100,7 @@ def adaptive_threshold(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     # Apply adaptive thresholding
-    threshold_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    threshold_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 2, 5)
     
     return threshold_image
 
@@ -80,23 +108,61 @@ def gamma_correction(image, gamma):
     invGamma = 1.0 / gamma
     table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
     return cv2.LUT(image, table)
-
 # if a region of the image is too busy, remove that pixel - it isn't a wire
 def average_threshold(img, threshold):
-    kernel = np.ones((5,5), dtype=np.uint8)
-    avg = cv2.filter2D(img, -1, kernel) // 9
+    kernel = np.ones((9,9), dtype=np.uint8)
+    avg = cv2.filter2D(img, -1, kernel) / 81
     img[avg>threshold] = 0
     return img
-
-# Morphological processing to extract edge information
-def rgb_morphological_diff(img):
-    kernel = np.ones((5,5), np.uint8)
+# If a region of the iamge has a variance that is too high, remove that pixel
+def variance_threshold(img, threshold):
+    kernel = np.ones((5,5), dtype=np.uint8)
+    # computing variance using filter2D and square operation
+    meanSq = cv2.filter2D(img, -1, kernel)**2 // 25
+    sqMean = cv2.filter2D(img**2, -1, kernel) // 25
+    var = sqMean - meanSq
+    # thresholding
+    img[var>threshold] = 0
+    return img
+# Make the wire stand out more
+def morphological_wire(img):
+    kernel = np.ones((3,3), np.uint8)
     closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
-    diff = np.subtract(closed, img)
-    eroded_diff = cv2.erode(diff, np.ones((3,3))) 
-    wires = np.subtract(diff, eroded_diff)
-    
-    return wires
+    return closed
+
+# Remove the wire
+def morphological_no_wire(img):
+    kernel = np.ones((3,3), np.uint8)
+    openned = cv2.morphologyEx(img, cv2.MORPH_ERODE, kernel)
+    return openned
+
+# This is an operation used on 
+def segmented_and_operation(image, kernel):
+    """
+    Perform an AND operation between a kernel and an image.
+    If all the overlapping pixels are 255, set the center pixel to 0.
+
+    :param image: Input image (binary)
+    :param kernel: Input kernel (binary)
+    :return: Processed image
+    """
+
+    # Perform the AND operation between the image and the kernel
+    and_result = cv2.filter2D(image, -1, kernel)
+
+    # Find locations where all overlapping pixels are 255
+    kernel_sum = np.sum(kernel)
+    locations = np.where(and_result == kernel_sum)
+
+    # Set the center pixel to 0 in those locations
+    result_image = np.copy(image)
+    center_y, center_x = kernel.shape[0] // 2, kernel.shape[1] // 2
+    result_image[locations[0] - center_y, locations[1] - center_x] = 0
+
+    return result_image
+
+
+
     
 
 # Define the location of the image files
@@ -109,23 +175,54 @@ for filename in os.listdir(image_dir_path):
         # Load the image
         img = cv2.imread(os.path.join(image_dir_path, filename))
         
-        wires = rgb_morphological_diff(img)
+        # Apply a color filter
+        img = green_and_red_filter(img, 1.35)
         
-        wires = average_threshold(wires, 30)
+        # To Grayscale
+        wires = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # kernel = np.ones((3,3), np.uint8)
+        # wires = cv2.morphologyEx(wires, cv2.MORPH_OPEN, kernel)
         
-        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Inverted", filename), wires)
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/ColorFilter", filename), wires)
+        # Inversion
+        wires = np.subtract(255, wires)
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Inversion", filename), wires)
+        # Extract Edges
+        wire = morphological_wire(wires)
         
-        gray_image = cv2.cvtColor(wires, cv2.COLOR_BGR2GRAY)
-        # inverted_image = np.subtract(255,gray_image)
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_Wire", filename), wire)
+        
+        no_wire = morphological_no_wire(wires)
+        
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_NoWire", filename), no_wire)
+        
+        wires = np.subtract(wire, no_wire)
+        
+        # Contrast stretch the images for the sake of normalizing the pixel ranges
+        cv2.normalize(wires, wires, 0, 255, cv2.NORM_MINMAX)
+        
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_diff", filename), wires)
+        
+        # # # Threshold pixels by average value
+        # # wires = average_threshold(wires, 2.9)
+        # # wires = variance_threshold(wires, 15)
+        
+        wires = sauvola_threshold(wires, 3, 0.34)
+        
+        # Perform Adaptive thresholding
+        # thresh = adaptive_threshold(wires)
+        # canny = CannyEdgeDetection(gray_image, 30, 150)
+        
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Threshold", filename), wires)
+        
+        # cross_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+        
+        # avg_img = cv2.filter2D(wires, -1, cross_kernel)
+        # wires[avg_img > 200] = 0
+        
+        # cv2.imwrite(os.path.join("X:/Programs/Research_Project/AND_Threshold", filename), wires)
         
         
-        gamma_img = gamma_correction(gray_image, 1)
         
-        # cv2.imwrite(os.path.join("X:/Programs/Research_Project/Inverted", filename), median_filtered)
-        
-        # # Apply the Sauvola thresholding algorithm with custom parameters
-        # threshold_img = cv2.adaptiveThreshold(median_filtered, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 3, 2)
-        
-        # cv2.imwrite(os.path.join(output_dir_path, filename), threshold_img)
         
 # Create a function that runs on an image called pixel color filter. Compare the ratio of green vs blue in each pixel. If that pixel value exceeds a threshold parameter, set the pixel value to 0.
