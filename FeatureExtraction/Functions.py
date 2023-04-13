@@ -1,6 +1,7 @@
 import numpy as np
 import mahotas as mh
 import cv2
+import csv
 from scipy.stats import skew, kurtosis, entropy
 import os
 import matplotlib.pyplot as plt
@@ -355,9 +356,9 @@ for filename in os.listdir(image_dir_path):
         cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/ColorFilter", filename), img)
         
         # To Grayscale
-        inv = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # Inversion
-        inv = np.subtract(255, inv)
+        inv = np.subtract(255, gray)
         cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Inverse", filename), inv)
         # Extract Edges
         wire = morphological_wire(inv)
@@ -385,11 +386,11 @@ for filename in os.listdir(image_dir_path):
         
         cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Threshold", filename), wires)
         
-        lbp_img = lbp_transform(inv, 1)
+        lbp_img = lbp_transform(gray, 1)
         
         cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/LBP", filename), lbp_img)
         
-        lbp_sobel_img = sobel_lbp(inv, 1)
+        lbp_sobel_img = sobel_lbp(gray, 1)
         
         cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Sobel_LBP", filename), lbp_sobel_img)
         
@@ -402,5 +403,24 @@ for filename in os.listdir(image_dir_path):
         skew_val, kurtosis_val, entropy_val, R_val = calculate_histogram_metrics(wires)
         
         
+        # create a list to hold the variable names
+        headers = ['filename', 'kurtosis', 'entropy', 'R-value', 'skewness', 'count', 'scale', 'fcc']
+
+        # create a list to hold the variable values
+        values = [filename, kurtosis_val, entropy_val, R_val, skew_val, count, scale, fcc]
         
-        
+        name, ext = os.path.splitext(filename)
+
+        file_path = os.path.join('X', 'Programs', 'FeatureExtraction', 'FeatureExtraction', f'{name}.csv')
+        with open(file_path, mode='w', newline='') as csvfile:
+            print('hello')
+            writer = csv.writer(csvfile)
+            writer.writerow(headers)
+            writer.writerow(values)
+            
+# Get the current working directory
+current_directory = os.getcwd()
+
+# Print the current working directory
+print("Current working directory:", current_directory)
+                
