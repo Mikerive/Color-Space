@@ -8,7 +8,7 @@ from .imageutils import ImagePlotter, ImageUtil
 # from .ImageProcessing import Tilation
 
 __all__ = ['Segment', 'Adaptive_Multiple_Threshold', 'pixels_above_threshold',
-           'Adaptive_Global_Threshold', 'Pixel_Filter', 'Global_Multiple_Threshold', 'Global_Threshold',
+           'Adaptive_Global_Threshold', 'Pixel_Segmentation', 'Global_Multiple_Threshold', 'Global_Threshold',
            'ImageSegment']
 
 class Segment:
@@ -194,14 +194,14 @@ class Adaptive_Global_Threshold(Segment):
 
         return mask2, self.class_name
 
-class Pixel_Filter(Segment):
-    def __init__(self, window_size, intra_std, func_type='Sauvola', plot = False, hist = False):
+class Pixel_Segmentation(Segment):
+    def __init__(self, window_size, intra_diff, func_type='Sauvola', plot = False, hist = False):
         self.class_name = self.__class__.__name__
         self.window_size = window_size
         self.func_type = func_type
         self.plot = plot
         self.hist = hist
-        self.intra_std = intra_std
+        self.intra_diff = intra_diff
     
     @staticmethod
     @jit(nopython=True)
@@ -264,9 +264,14 @@ class Pixel_Filter(Segment):
         # Calculate the padding size based on the window size
         padding_size = int(self.window_size) // 2
 
-        # Pad the image with zeros
-        padded_image = np.pad(img, ((padding_size, padding_size),
-                              (padding_size, padding_size), (0, 0)), mode='constant')
+        # Pad the image
+        img_padded = cv2.copyMakeBorder(img,
+                                         padding_size,
+                                         padding_size,
+                                         padding_size,
+                                         padding_size,
+                                         cv2.BORDER_CONSTANT,
+                                         value=0)
 
         if self.func_type == 'Niblack':
             func = self.Niblack
@@ -276,9 +281,9 @@ class Pixel_Filter(Segment):
             func = self.Bernsen
 
         output = np.zeros_like(img)
-        output = [func(padded_image[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size, self.intra_std)
-                  for row in range(padding_size, padded_image.shape[0] - padding_size)
-                  for col in range(padding_size, padded_image.shape[1] - padding_size)
+        output = [func(img_padded[row-padding_size:row+padding_size+1, col-padding_size:col+padding_size+1, channel], padding_size, self.intra_diff)
+                  for row in range(padding_size, img_padded.shape[0] - padding_size)
+                  for col in range(padding_size, img_padded.shape[1] - padding_size)
                   for channel in range(0, img.shape[2])]
         
         output = np.array(output).reshape(img.shape)

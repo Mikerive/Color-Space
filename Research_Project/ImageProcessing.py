@@ -18,33 +18,46 @@ Calculate Edge Direction map using fourier edge map.
 import cv2
 import numpy as np
 import os
-from skimage.filters import (threshold_sauvola)
-# import mahotas as mh
+from skimage.util import view_as_windows
 
+def Sauvola_Threshold(img, kernel_size, stride=1, k=0.34, R=128):
+    window_shape = (kernel_size, kernel_size)
+    windows = view_as_windows(img, window_shape, step=stride)
 
-def sauvola_threshold(image, window_size=15, k=0.2):
-    """
-    Apply binary thresholding to an image based on Sauvola's adaptive method.
-    :param image: numpy array representing the image.
-    :param window_size: the size of the window used for calculating the threshold.
-    :return: binary image with pixel values equal to 0 or 1.
-    """
-    binary_image = np.zeros_like(image)
+    # Calculate means and standard deviations for each window
+    means = np.mean(windows, axis=(2, 3))
+    stds = np.std(windows, axis=(2, 3))
 
-    # calculate Sauvola threshold
-    threshold = threshold_sauvola(image, window_size=window_size, k=k)
+    # Compute the local threshold for each channel
+    thresholds = means * (1.0 + k * (-1 + stds / R))
 
-    # apply binary thresholding based on Sauvola threshold
-    binary_image[image < threshold] = 255
-    return binary_image.astype('uint8')
+    # Get the center pixels of each window
+    padding = kernel_size // 2
+    center_pixels = windows[:, :, padding, padding]
 
-# def sauvola_threshold(image, window_size = 12, k=0.2):
-#     thresh_sauvola = cv2.ximgproc.niBlackThreshold(image, maxValue=255, type=cv2.THRESH_BINARY_INV, blockSize=window_size, k=k)
-#     binary_sauvola = np.zeros_like(image)
-#     binary_sauvola[image >= thresh_sauvola] = 255
-#     binary_sauvola = cv2.bitwise_not(binary_sauvola)
-#     return binary_sauvola
+    # Create the output image by applying the threshold
+    output_image = np.where(center_pixels > thresholds, 255, 0)
 
+    return output_image.astype(np.uint8)
+
+def sliding_window_diff(img, kernel_size, stride = 1):
+    window_shape = (kernel_size, kernel_size)
+    # Define the border sizes
+    top_border, bottom_border, left_border, right_border = kernel_size // 2, kernel_size // 2, kernel_size // 2, kernel_size // 2
+    # Perform the symmetric padding with zeros
+    padded_img = cv2.copyMakeBorder(img, top=top_border, bottom=bottom_border, left=left_border, right=right_border, borderType=cv2.BORDER_CONSTANT, value=0)
+
+    # Create sliding windows of the padded image
+    windows = view_as_windows(padded_img, window_shape, step=stride)
+
+    # Compute the max and min pixel values in each window
+    window_max = np.amax(windows, axis=(2, 3))
+    window_min = np.amin(windows, axis=(2, 3))
+
+    # Compute the pixel differences and clip to the range [0, 1]
+    diffs = window_max - window_min
+
+    return diffs.astype(np.uint8)
 
 #RGB Contrast Stretch
 def rgb_contrast_stretch(img):
@@ -85,13 +98,6 @@ def green_and_red_filter(cv_image: np.ndarray, ratio: float, kernel_size = 12):
     cv_image[white_mask] = mean_filtered_image[white_mask]
     return cv_image
 
-def bgr_to_gray(image):
-    """
-    Convert cv2 image from BGR to grayscale color space.
-    """
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return gray_image
-
 def adaptive_threshold(image):
     """
     Apply adaptive global thresholding on a grayscale image.
@@ -126,15 +132,15 @@ def variance_threshold(img, threshold):
     return img
 # Make the wire stand out more
 def morphological_wire(img):
-    kernel = np.ones((3,3), np.uint8)
-    closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
+    kernel = np.ones((2,2), np.uint8)
+    closed = cv2.morphologyEx(img, cv2.MORPH_DILATE, kernel)
     return closed
 
 # Remove the wire
 def morphological_no_wire(img):
-    kernel = np.ones((3,3), np.uint8)
-    openned = cv2.morphologyEx(img, cv2.MORPH_ERODE, kernel)
-    return openned
+    # kernel = np.ones((2,2), np.uint8)
+    # openned = cv2.morphologyEx(img, cv2.MORPH_ERODE, kernel)
+    return img
 
 # This is an operation used on 
 def segmented_and_operation(image, kernel):
@@ -189,11 +195,9 @@ for filename in os.listdir(image_dir_path):
         cv2.imwrite(os.path.join("X:/Programs/Research_Project/Inversion", filename), wires)
         # Extract Edges
         wire = morphological_wire(wires)
-        
         cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_Wire", filename), wire)
         
         no_wire = morphological_no_wire(wires)
-        
         cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_NoWire", filename), no_wire)
         
         wires = np.subtract(wire, no_wire)
@@ -201,17 +205,25 @@ for filename in os.listdir(image_dir_path):
         # Contrast stretch the images for the sake of normalizing the pixel ranges
         cv2.normalize(wires, wires, 0, 255, cv2.NORM_MINMAX)
         
-        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_diff", filename), wires)
-        
         # # # Threshold pixels by average value
         # # wires = average_threshold(wires, 2.9)
         # # wires = variance_threshold(wires, 15)
         
-        wires = sauvola_threshold(wires, 3, 0.34)
+        # wires = ImageSegment(wires).process(Pixel_Segmentation(3, 50))
         
         # Perform Adaptive thresholding
         # thresh = adaptive_threshold(wires)
         # canny = CannyEdgeDetection(gray_image, 30, 150)
+        
+        # Find the difference 
+        # wire_diff = sliding_window_diff(wires, 5)
+        
+        # # if the difference isn't great enough, set it to zero.
+        # wires[wire_diff < 50] = 0
+        
+        cv2.imwrite(os.path.join("X:/Programs/Research_Project/Morphological_diff", filename), wires)
+        
+        wires = Sauvola_Threshold(wires, 5, 3, 0.24)
         
         cv2.imwrite(os.path.join("X:/Programs/Research_Project/Threshold", filename), wires)
         
