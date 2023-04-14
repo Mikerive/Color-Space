@@ -7,6 +7,30 @@ import mahotas as mh
 from skimage.util import view_as_windows
 from skimage.feature import local_binary_pattern
 
+
+def remove_lone_pixels(image):
+    # Define kernel
+    kernel = np.array([[1, 1, 1],
+                       [1, 0, 1],
+                       [1, 1, 1]])
+    
+    # Expand image with zero padding
+    expanded = np.pad(image, 1, mode="constant")
+    
+    # Create sliding window view of image
+    windows = view_as_windows(expanded, (3, 3))
+    
+    # Convolve windows with kernel
+    neighbors_array = np.sum(windows * kernel, axis=(2, 3))
+    
+    # Identify lone pixels
+    lone_pixels = (neighbors_array == 0) & image
+    
+    # Remove lone pixels
+    output = np.multiply(image, np.logical_not(lone_pixels))
+    
+    return output
+
 def Sauvola_Threshold(img, kernel_size, k=0.34, R=128, stride=1):
     window_shape = (kernel_size, kernel_size)
     windows = view_as_windows(img, window_shape, step=stride)
@@ -106,7 +130,7 @@ def variance_threshold(img, threshold):
 # Make the wire stand out more
 def morphological_wire(img):
     kernel = np.ones((2,2), np.uint8)
-    closed = cv2.morphologyEx(img, cv2.MORPH_DILATE, kernel)
+    closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
     return closed
 
 # Remove the wire
@@ -205,7 +229,7 @@ def box_counting(image, scale_step=0.5, threshold=None):
     scale_list = []
     
     # Loop over the range of scale factors
-    for i in np.arange(scale_step, 1, scale_step):
+    for i in np.arange(scale_step, 1+scale_step, scale_step):
         # Call the helper function to scale and count the image
         count = scale_and_count(image=image, scale=i, threshold=threshold)
         # Append the count and scale factor to their respective lists
@@ -231,7 +255,7 @@ def box_counting(image, scale_step=0.5, threshold=None):
 
 def calculate_histogram_metrics(image):
     # Calculate the histogram of the image
-    hist = cv2.calcHist([image], [0], None, [256], [0, 256])
+    hist = cv2.calcHist([image], [0], None, [255], [0, 255])
     hist_norm = np.zeros_like(hist)
     # Normalize the histogram using L1 normalization
     cv2.normalize(hist,hist_norm,1.0,0.0,cv2.NORM_L1)
@@ -262,7 +286,10 @@ def lbp_transform(img, radius=1, points=8):
     METHOD = 'uniform'
     lbp = local_binary_pattern(img, points, radius, METHOD)
     cv2.normalize(lbp, lbp, 0, 255, cv2.NORM_MINMAX)
-    return lbp
+    if lbp.ndim == 2:
+        lbp = np.expand_dims(lbp, axis=2)
+        
+    return lbp.astype(np.uint8)
 
 
 # Freeman Chain Code Calculations
@@ -320,13 +347,13 @@ def FCC_MaxContour(img):
     # Return the Freeman chain code approximation
     return fcc, img_with_contour
 
-
 def green_and_red_filter(cv_image: np.ndarray, ratio: float, kernel_size = 12):
     # Get the green, red, and blue values of all pixels
     bgr_values = cv_image[..., :3]
 
     # Compute the ratio of green vs blue for all pixels
     green_blue_ratios = bgr_values[..., 1] / bgr_values[..., 0]
+
 
     # Compute the ratio of red vs blue for all pixels
     red_blue_ratios = bgr_values[..., 2] / bgr_values[..., 0]
@@ -351,14 +378,22 @@ for filename in os.listdir(image_dir_path):
         img = cv2.imread(os.path.join(image_dir_path, filename))
         
         # Apply a color filter
-        img = green_and_red_filter(img, 1.35)
+        img = green_and_red_filter(img, 1.5)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/ColorFilter", filename), img)
         
         # To Grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
         # Inversion
         inv = np.subtract(255, gray)
+        
+        # Gamma Correction
+        inv = gamma_correction(inv, 0.5)
+        
+        # Contrast stretch the images for the sake of normalizing the pixel ranges
+        cv2.normalize(inv, inv, 0, 255, cv2.NORM_MINMAX)
+        
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Inverse", filename), inv)
         # Extract Edges
         wire = morphological_wire(inv)
@@ -369,32 +404,34 @@ for filename in os.listdir(image_dir_path):
         
         diff = np.subtract(wire, no_wire)
         
-        # Contrast stretch the images for the sake of normalizing the pixel ranges
-        cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
-        
         # Find the difference 
         wire_diff = sliding_window_diff(diff, 3, 50)
         
-        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Morphological_diff", filename), diff)
-        
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Morphological_diff", filename), wire_diff)
         # Sauvola is designed to threshold text in images
-        wires = np.subtract(255, diff)
+        inv = np.subtract(255, inv)
         
-        wires = Sauvola_Threshold(wires, 3, 0.34, 120)
+        wires = Sauvola_Threshold(inv, 5, 0.2, 128)
         # re-invert the output of sauvola thresholding
         wires = np.subtract(255, wires)
         
+        wires = remove_lone_pixels(wires)
+        
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Threshold", filename), wires)
         
-        lbp_img = lbp_transform(gray, 2)
+        lbp_img = lbp_transform(wires, 3)
+        
+        lbp_img = np.subtract(255, lbp_img)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/LBP", filename), lbp_img)
         
-        lbp_sobel_img = sobel_lbp(gray, 2)
+        lbp_sobel_img = sobel_lbp(wires, 3)
+        
+        lbp_sobel_img = np.subtract(255, lbp_sobel_img)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Sobel_LBP", filename), lbp_sobel_img)
         
-        fcc, contour_img = FCC_MaxContour(diff)
+        fcc, contour_img = FCC_MaxContour(wires)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/FCC_MaxContour", filename), contour_img)
         
@@ -402,13 +439,18 @@ for filename in os.listdir(image_dir_path):
         
         skew_val, kurtosis_val, entropy_val, R_val = calculate_histogram_metrics(wires)
         
+        s_count, s_scale = box_counting(lbp_img, 0.2)
+        
+        s_skew_val, s_kurtosis_val, s_entropy_val, s_R_val = calculate_histogram_metrics(lbp_img)
+        
         
         # Pass quantitative values to a csv file.
         
         # create a list to hold the variable names
-        headers = ['filename', 'kurtosis', 'entropy', 'R-value', 'skewness', 'count', 'scale', 'fcc']
+        headers = ['filename', 'kurtosis', 'entropy', 'R-value', 'skewness', 'count', 'scale']
         # create a list to hold the variable values
-        values = [filename, kurtosis_val, entropy_val, R_val, skew_val, count, scale, fcc]
+        values = [filename, kurtosis_val, entropy_val, R_val, skew_val, count, scale]
+        lbp_values = [filename, s_kurtosis_val, s_entropy_val, s_R_val, s_skew_val, s_count, s_scale]
         
         name, ext = os.path.splitext(filename)
 
@@ -417,4 +459,6 @@ for filename in os.listdir(image_dir_path):
             writer = csv.writer(csvfile)
             writer.writerow(headers)
             writer.writerow(values)
+            writer.writerow(lbp_values)
+            writer.writerow(fcc)
                 

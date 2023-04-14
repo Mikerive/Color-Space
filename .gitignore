@@ -5,3 +5,4 @@ Image/
 __pycache__/
 *.pyc
 myenv/
+*.csv
