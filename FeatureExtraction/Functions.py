@@ -1,10 +1,9 @@
 import numpy as np
-import mahotas as mh
 import cv2
 import csv
 from scipy.stats import skew, kurtosis, entropy
 import os
-import matplotlib.pyplot as plt
+import mahotas as mh
 from skimage.util import view_as_windows
 from skimage.feature import local_binary_pattern
 
@@ -188,16 +187,16 @@ def box_counting(image, scale_step=0.5, threshold=None):
         count: int
             The count of non-zero pixel values in the scaled image.
         """
-        # Scale the image
-        scaled_image = mh.imresize(image,scale)
-        # Binarize the image if required
-        if threshold is not None:
-            binary_image = (scaled_image>threshold).astype(np.uint8)
-        else:
-            binary_image = scaled_image.astype(np.uint8)
+       # Get the new dimensions of the image
+        height = int(image.shape[0] * scale)
+        width = int(image.shape[1] * scale)
+        dim = (width, height)
+
+        # Resize the image
+        scaled_image = cv2.resize(image, dim)
             
         # Sum up the non-zero pixels and return the result
-        count = cv2.countNonZero(binary_image)
+        count = cv2.countNonZero(scaled_image)
         return count
     
     
@@ -343,7 +342,8 @@ def green_and_red_filter(cv_image: np.ndarray, ratio: float, kernel_size = 12):
     return cv_image
 
 # Define the location of the image files
-image_dir_path = "X:/Programs/FeatureExtraction/TestImages"
+image_dir_path = 'C:/Programs/Image Processing/Color Space/FeatureExtraction/test_images'
+
         
 for filename in os.listdir(image_dir_path):
     if filename.endswith(".jpg") or filename.endswith(".png"):
@@ -353,19 +353,19 @@ for filename in os.listdir(image_dir_path):
         # Apply a color filter
         img = green_and_red_filter(img, 1.35)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/ColorFilter", filename), img)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/ColorFilter", filename), img)
         
         # To Grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # Inversion
         inv = np.subtract(255, gray)
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Inverse", filename), inv)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Inverse", filename), inv)
         # Extract Edges
         wire = morphological_wire(inv)
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Morphological_Wire", filename), wire)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Morphological_Wire", filename), wire)
         
         no_wire = morphological_no_wire(inv)
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Morphological_NoWire", filename), no_wire)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Morphological_NoWire", filename), no_wire)
         
         diff = np.subtract(wire, no_wire)
         
@@ -375,7 +375,7 @@ for filename in os.listdir(image_dir_path):
         # Find the difference 
         wire_diff = sliding_window_diff(diff, 3, 50)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Morphological_diff", filename), diff)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Morphological_diff", filename), diff)
         
         # Sauvola is designed to threshold text in images
         wires = np.subtract(255, diff)
@@ -384,43 +384,37 @@ for filename in os.listdir(image_dir_path):
         # re-invert the output of sauvola thresholding
         wires = np.subtract(255, wires)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Threshold", filename), wires)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Threshold", filename), wires)
         
-        lbp_img = lbp_transform(gray, 1)
+        lbp_img = lbp_transform(gray, 2)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/LBP", filename), lbp_img)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/LBP", filename), lbp_img)
         
-        lbp_sobel_img = sobel_lbp(gray, 1)
+        lbp_sobel_img = sobel_lbp(gray, 2)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/Sobel_LBP", filename), lbp_sobel_img)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Sobel_LBP", filename), lbp_sobel_img)
         
         fcc, contour_img = FCC_MaxContour(diff)
         
-        cv2.imwrite(os.path.join("X:/Programs/FeatureExtraction/FCC_MaxContour", filename), contour_img)
+        cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/FCC_MaxContour", filename), contour_img)
         
         count, scale = box_counting(wires, 0.2)
         
         skew_val, kurtosis_val, entropy_val, R_val = calculate_histogram_metrics(wires)
         
         
+        # Pass quantitative values to a csv file.
+        
         # create a list to hold the variable names
         headers = ['filename', 'kurtosis', 'entropy', 'R-value', 'skewness', 'count', 'scale', 'fcc']
-
         # create a list to hold the variable values
         values = [filename, kurtosis_val, entropy_val, R_val, skew_val, count, scale, fcc]
         
         name, ext = os.path.splitext(filename)
 
-        file_path = os.path.join('X', 'Programs', 'FeatureExtraction', 'FeatureExtraction', f'{name}.csv')
+        file_path = os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/FeatureExtraction", f'{name}.csv')
         with open(file_path, mode='w', newline='') as csvfile:
-            print('hello')
             writer = csv.writer(csvfile)
             writer.writerow(headers)
             writer.writerow(values)
-            
-# Get the current working directory
-current_directory = os.getcwd()
-
-# Print the current working directory
-print("Current working directory:", current_directory)
                 
