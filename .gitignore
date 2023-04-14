@@ -1,7 +1,7 @@
 *.png
 *.jpg
-/Image
-/.ipynb_checkpoints
-/__pycache__
+Image/
+.ipynb_checkpoints/
+__pycache__/
 *.pyc
-/myenv
+myenv/
