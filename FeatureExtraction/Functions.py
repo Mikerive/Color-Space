@@ -165,7 +165,6 @@ def segmented_and_operation(image, kernel):
     return result_image
 
 # Box Counting
-
 def box_counting(image, scale_step=0.5, threshold=None):
     """
     Perform box counting on an image using Mahotas.
@@ -240,9 +239,9 @@ def box_counting(image, scale_step=0.5, threshold=None):
     counts = np.array(count_list)
     scales = np.array(scale_list)
     
-    # Fit a line to the log-log plot of counts vs. scales
-    p = np.polyfit(np.log(scales), np.log(counts), 1)
-    line = np.exp(p[1]) * scales**p[0]
+    # # Fit a line to the log-log plot of counts vs. scales
+    # p = np.polyfit(np.log(scales), np.log(counts), 1)
+    # line = np.exp(p[1]) * scales**p[0]
     
     # # Plot the log-log plot of counts vs. scales and the fitted line
     # plt.loglog(scales, counts, 'bo')
@@ -268,9 +267,7 @@ def calculate_histogram_metrics(image):
     
     return skewness, kurtosis_val, entropy_val, R
 
-
 # Local Binary Pattern 
-
 def sobel_lbp(img, radius = 1, points = 8):
     sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=5)
     sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=5)
@@ -291,9 +288,7 @@ def lbp_transform(img, radius=1, points=8):
         
     return lbp.astype(np.uint8)
 
-
 # Freeman Chain Code Calculations
-
 def calculate_direction(x_diff, y_diff):
     if x_diff == 0 and y_diff == -1:
         return 0
@@ -419,19 +414,19 @@ for filename in os.listdir(image_dir_path):
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Threshold", filename), wires)
         
-        lbp_img = lbp_transform(wires, 3)
+        lbp_img = lbp_transform(wire, 3)
         
         lbp_img = np.subtract(255, lbp_img)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/LBP", filename), lbp_img)
         
-        lbp_sobel_img = sobel_lbp(wires, 3)
+        lbp_sobel_img = sobel_lbp(wire, 3)
         
         lbp_sobel_img = np.subtract(255, lbp_sobel_img)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/Sobel_LBP", filename), lbp_sobel_img)
         
-        fcc, contour_img = FCC_MaxContour(wires)
+        fcc, contour_img = FCC_MaxContour(wire)
         
         cv2.imwrite(os.path.join("C:/Programs/Image Processing/Color Space/FeatureExtraction/FCC_MaxContour", filename), contour_img)
         
