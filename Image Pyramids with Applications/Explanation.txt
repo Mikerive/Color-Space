@@ -1,22 +1,39 @@
+CLAHE stands for Contrast Limited Adaptive Histogram Equalization. It is a technique used in image processing to enhance the contrast of images. The principle behind CLAHE is to divide the image into small blocks, perform histogram equalization on each block, and then combine the blocks to form the final image.
+
+
+However, unlike traditional histogram equalization, CLAHE has an adaptive contrast limiting step that prevents over-amplification of noise in homogenous regions of the image, thus avoiding the occurrence of artifacts. 
+
+
+This technique has proved useful in applications such as medical imaging, satellite and aerial imagery, and computer vision.
+
+
+
+
+
+
+
+
+
+
 Structure tensor analysis is a technique for capturing the local gradient structure of an image, allowing you to estimate the predominant orientation of edges in the image. To utilize structure tensor analysis with Sobel edges for calculating edge directions, follow these steps:
 
-1. Convert the image to grayscale: Convert the input image to a grayscale representation if it's originally in a color space like RGB. This simplifies the image and focuses on luminance information, which is more relevant for edge detection.
+    1. Convert the image to grayscale: Convert the input image to a grayscale representation if it's originally in a color space like RGB. This simplifies the image and focuses on luminance information, which is more relevant for edge detection.
 
-2. Calculate gradient using the Sobel operator: Apply the Sobel operator to the grayscale image to calculate the gradients in the x (Gx) and y (Gy) directions. The Sobel operator consists of two kernels, one for the x-direction and another for the y-direction, which can be convolved with the image to obtain the gradients.
+    2. Calculate gradient using the Sobel operator: Apply the Sobel operator to the grayscale image to calculate the gradients in the x (Gx) and y (Gy) directions. The Sobel operator consists of two kernels, one for the x-direction and another for the y-direction, which can be convolved with the image to obtain the gradients.
 
-3. Calculate gradient magnitude and direction: Compute the gradient magnitude (M) and direction (Theta) at each pixel using the calculated gradients Gx and Gy:
-   
-   M(x, y) = sqrt(Gx(x, y)^2 + Gy(x, y)^2)
-   Theta(x, y) = arctan(Gy(x, y) / Gx(x, y))
+    3. Calculate gradient magnitude and direction: Compute the gradient magnitude (M) and direction (Theta) at each pixel using the calculated gradients Gx and Gy:
+    
+    M(x, y) = sqrt(Gx(x, y)^2 + Gy(x, y)^2)
+    Theta(x, y) = arctan(Gy(x, y) / Gx(x, y))
 
-4. Calculate structure tensor components: Compute the three components of the structure tensor J for each pixel in the image using the gradient magnitudes (M) and directions (Theta):
+    4. Calculate structure tensor components: Compute the three components of the structure tensor J for each pixel in the image using the gradient magnitudes (M) and directions (Theta):
 
-   J_11(x, y) = M(x, y)^2 * cos(Theta(x, y))^2
-   J_12(x, y) = J_21(x, y) = M(x, y)^2 * cos(Theta(x, y)) * sin(Theta(x, y))
-   J_22(x, y) = M(x, y)^2 * sin(Theta(x, y))^2
+    J_11(x, y) = M(x, y)^2 * cos(Theta(x, y))^2
+    J_12(x, y) = J_21(x, y) = M(x, y)^2 * cos(Theta(x, y)) * sin(Theta(x, y))
+    J_22(x, y) = M(x, y)^2 * sin(Theta(x, y))^2
 
-5. Smooth structure tensor components: Apply a Gaussian smoothing filter to the structure tensor components J_11, J_12, and J_22. This step helps in aggregating the gradient information over a local neighborhood and makes the tensor robust against noise.
+    5. Smooth structure tensor components: Apply a Gaussian smoothing filter to the structure tensor components J_11, J_12, and J_22. This step helps in aggregating the gradient information over a local neighborhood and makes the tensor robust against noise.
 
-6. Calculate the edge directions using structure tensor: For each pixel in the image, calculate the edge direction using the smoothed structure tensor components. The dominant edge direction can be obtained from the eigenvectors of the structure tensor corresponding to the largest eigenvalue. Compute the eigenvalues (λ1 and λ2) and the corresponding eigenvectors (v1 and v2) for the 2x2 structure tensor matrix at each pixel. The eigenvector (v1) corresponding to the largest eigenvalue (λ1) represents the dominant edge direction.
+    6. Calculate the edge directions using structure tensor: For each pixel in the image, calculate the edge direction using the smoothed structure tensor components. The dominant edge direction can be obtained from the eigenvectors of the structure tensor corresponding to the largest eigenvalue. Compute the eigenvalues (λ1 and λ2) and the corresponding eigenvectors (v1 and v2) for the 2x2 structure tensor matrix at each pixel. The eigenvector (v1) corresponding to the largest eigenvalue (λ1) represents the dominant edge direction.
 
 Following these steps, you can use structure tensor analysis with Sobel edges to calculate edge directions in an image. The computed edge directions can be used for various applications like edge-enhancement, directional filtering, or texture analysis.

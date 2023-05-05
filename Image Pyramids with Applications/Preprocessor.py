@@ -3,6 +3,77 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import tkinter as tk
+import cv2
+import numpy as np
+from skimage import feature
+from skimage.util import view_as_windows
+
+
+
+def Sauvola_Threshold(img, kernel_size = 7, k=0.34, R=128, stride=1):
+    img = np.subtract(255, img)
+    window_shape = (kernel_size, kernel_size)
+    windows = view_as_windows(img, window_shape, step=stride)
+
+    # Calculate means and standard deviations for each window
+    means = np.mean(windows, axis=(2, 3))
+    stds = np.std(windows, axis=(2, 3))
+
+    # Compute the local threshold for each channel
+    thresholds = means * (1.0 + k * (-1 + stds / R))
+
+    # Get the center pixels of each window
+    padding = kernel_size // 2
+    center_pixels = windows[:, :, padding, padding]
+
+    # Create the output image by applying the threshold
+    output_image = np.where(center_pixels > thresholds, 255, 0)
+    
+    output_image = np.subtract(255, output_image)
+
+    return output_image.astype(np.uint8)
+
+def lbp_directional_segmentation(image, cell_size=(16, 16)):
+    def lbp(image, radius=1, points=8):
+        return feature.local_binary_pattern(image, points, radius, method='uniform')
+
+    def lbp_histogram(image, cell_size=(16, 16), points=8):
+        height, width = image.shape
+        y_cells, x_cells = height // cell_size[0], width // cell_size[1]
+        histogram = np.zeros((y_cells, x_cells, points+1), dtype=np.float32)
+        
+        for i in range(y_cells):
+            for j in range(x_cells):
+                cell = image[i*cell_size[0]:(i+1)*cell_size[0], j*cell_size[1]:(j+1)*cell_size[1]]
+                hist, _ = np.histogram(cell, bins=np.arange(0, points + 2), density=True)
+                histogram[i, j, :] = hist
+        
+        return histogram.reshape(-1, points+1)
+
+    def max_histogram_direction(hist):
+        global_hist = np.sum(hist, axis=0)
+        max_direction = np.argmax(global_hist)
+        return max_direction
+
+    def segment_image(lbp_img, direction, segmented_value=255):
+        segmented = np.where(lbp_img == direction, segmented_value, 0).astype(np.uint8)
+        return segmented
+    
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    # Apply LBP transformation
+    lbp_image = lbp(image)
+
+    # Compute LBP histogram
+    hist = lbp_histogram(lbp_image, cell_size=cell_size)
+
+    # Find the most common direction
+    direction = max_histogram_direction(hist)
+
+    # Segment the image
+    segmented_image = segment_image(lbp_image, direction)
+
+    return segmented_image
 
 def structure_tensor(image, window_size=5, sigma=1):
     
@@ -36,19 +107,6 @@ def structure_tensor(image, window_size=5, sigma=1):
     edge_directions = edge_directions.reshape(gray.shape)
 
     return edge_directions
-
-
-# Load an image
-image = cv2.imread("input_image.jpg")
-
-# Compute edge directions
-edge_directions = structure_tensor(image)
-
-# Visualize edge directions
-cv2.imshow("Edge Directions", edge_directions)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
 
 def show_lab_channels(rgb_image, window_size=(300, 300)):
     """
@@ -162,6 +220,8 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
 def preprocessor(input_folder, output_folder):
     sobel_edge_folder = os.path.join(output_folder, "sobel_edge")
     clahe_folder = os.path.join(output_folder, "clahe")
+    tensor_folder = os.path.join(output_folder, "tensor")
+    lbp_directions_seg_folder = os.path.join(output_folder, "lbpdirseg")
     
     if not os.path.exists(output_folder):
         os.makedirs(sobel_edge_folder)
@@ -171,6 +231,12 @@ def preprocessor(input_folder, output_folder):
         
     if not os.path.exists(clahe_folder):
         os.makedirs(clahe_folder)
+        
+    if not os.path.exists(tensor_folder):
+        os.makedirs(tensor_folder)
+        
+    if not os.path.exists(lbp_directions_seg_folder):
+        os.makedirs(lbp_directions_seg_folder)
 
     for filename in os.listdir(input_folder):
         if filename.endswith(".jpg") or filename.endswith(".png"):
@@ -181,9 +247,17 @@ def preprocessor(input_folder, output_folder):
             output_image_path = os.path.join(clahe_folder, filename)
             cv2.imwrite(output_image_path, clahe_image)
             
-            sobel_edge_image = sobel_edge(image)
+            sobel_edge_image = Sauvola_Threshold(sobel_edge(image))
             output_image_path = os.path.join(sobel_edge_folder, filename)
             cv2.imwrite(output_image_path, sobel_edge_image)
+            
+            # tensor_image = structure_tensor(image)
+            # output_image_path = os.path.join(tensor_folder, filename)
+            # cv2.imwrite(output_image_path, tensor_image)
+            
+            lbp_directions_seg = lbp_directional_segmentation(image)
+            output_image_path = os.path.join(lbp_directions_seg_folder, filename)
+            cv2.imwrite(output_image_path, lbp_directions_seg)
             
             # show_lab_channels(image)
 
