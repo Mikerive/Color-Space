@@ -3,16 +3,7 @@ CLAHE stands for Contrast Limited Adaptive Histogram Equalization. It is a techn
 
 However, unlike traditional histogram equalization, CLAHE has an adaptive contrast limiting step that prevents over-amplification of noise in homogenous regions of the image, thus avoiding the occurrence of artifacts. 
 
-
-This technique has proved useful in applications such as medical imaging, satellite and aerial imagery, and computer vision.
-
-
-
-
-
-
-
-
+####################################################################
 
 
 Structure tensor analysis is a technique for capturing the local gradient structure of an image, allowing you to estimate the predominant orientation of edges in the image. To utilize structure tensor analysis with Sobel edges for calculating edge directions, follow these steps:
@@ -35,5 +26,3 @@ Structure tensor analysis is a technique for capturing the local gradient struct
     5. Smooth structure tensor components: Apply a Gaussian smoothing filter to the structure tensor components J_11, J_12, and J_22. This step helps in aggregating the gradient information over a local neighborhood and makes the tensor robust against noise.
 
     6. Calculate the edge directions using structure tensor: For each pixel in the image, calculate the edge direction using the smoothed structure tensor components. The dominant edge direction can be obtained from the eigenvectors of the structure tensor corresponding to the largest eigenvalue. Compute the eigenvalues (λ1 and λ2) and the corresponding eigenvectors (v1 and v2) for the 2x2 structure tensor matrix at each pixel. The eigenvector (v1) corresponding to the largest eigenvalue (λ1) represents the dominant edge direction.
-
-Following these steps, you can use structure tensor analysis with Sobel edges to calculate edge directions in an image. The computed edge directions can be used for various applications like edge-enhancement, directional filtering, or texture analysis.

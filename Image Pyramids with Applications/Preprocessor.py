@@ -7,10 +7,15 @@ import cv2
 import numpy as np
 from skimage import feature
 from skimage.util import view_as_windows
+import random
+from scipy.stats import kurtosis, skew
+import pandas as pd
+from skimage.filters import threshold_sauvola
+from scipy import ndimage
 
+""" Used to produce images for presentations and test image transformations before being passed to the SVM."""
 
-
-def Sauvola_Threshold(img, kernel_size = 7, k=0.34, R=128, stride=1):
+def Sauvola_Threshold(img, kernel_size = 35, k=0.28, R=50, stride=1):
     img = np.subtract(255, img)
     window_shape = (kernel_size, kernel_size)
     windows = view_as_windows(img, window_shape, step=stride)
@@ -217,51 +222,388 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
 
     return result_image
 
-def preprocessor(input_folder, output_folder):
-    sobel_edge_folder = os.path.join(output_folder, "sobel_edge")
-    clahe_folder = os.path.join(output_folder, "clahe")
-    tensor_folder = os.path.join(output_folder, "tensor")
-    lbp_directions_seg_folder = os.path.join(output_folder, "lbpdirseg")
-    
-    if not os.path.exists(output_folder):
-        os.makedirs(sobel_edge_folder)
+def downsample_image(image, factor):
+    """
+    Downsample an image by a specific factor.
 
-    if not os.path.exists(sobel_edge_folder):
-        os.makedirs(sobel_edge_folder)
+    Parameters:
+    image (numpy.ndarray): The image to downsample.
+    factor (float): The factor by which to downsample the image. 
+                    This should be a value greater than 0 and less than or equal to 1. 
+                    A factor of 1 will keep the image at its original size, 
+                    while a factor of 0.5 will reduce the image size by half.
+
+    Returns:
+    numpy.ndarray: The downsampled image.
+    """
+    if not 0 < factor <= 1:
+        raise ValueError("Factor should be a value greater than 0 and less than or equal to 1")
+
+    # Calculate the new size of the image
+    new_size = (int(image.shape[1] * factor), int(image.shape[0] * factor))
+
+    # Resize the image
+    downsampled_image = cv2.resize(image, new_size, interpolation = cv2.INTER_LINEAR)
+
+    return downsampled_image
+
+def remove_small_clusters(image, min_size):
+    # label image
+    labeled_array, num_features = ndimage.label(image)
+    # get counts of each unique label (excluding 0)
+    unique, counts = np.unique(labeled_array[labeled_array>0], return_counts=True)
+    # create a boolean mask where True indicates a large cluster
+    large_clusters = np.isin(labeled_array, unique[counts>=min_size])
+    # create a new image where only the large clusters are visible
+    large_cluster_image = np.zeros_like(image)
+    large_cluster_image[large_clusters] = image[large_clusters]
+    return large_cluster_image
+
+def line_contour_features(image, ratio_threshold = 1, min_size_ratio = 0.01):
+    """Find line contours in an image. Filter by size, then filter by the ratio
+    between the major and minor axis. Finally, utilize angle information to calculate
+    the variance in the angles of powerlines in the image.
+    """
+
+    # Find contours
+    contours, _ = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Initialize the output image and counter for qualified contours
+    image_with_contours = np.stack((image,) * 3, axis=-1)
+    counter = 0
+
+    # Calculate the minimum size of the contours
+    min_size = min_size_ratio * image.shape[0] * image.shape[1]
+    
+    # List to store the angles of the ellipses
+    angles = []
+    
+    # List to store the areas of the contours
+    areas = []
+
+    for cnt in contours:
+        # We need at least 5 points to fit the ellipse
+        if len(cnt) >= 5:
+            # Check if the contour is large enough
+            area = cv2.contourArea(cnt)
+            
+            if area >= min_size:
+                ellipse = cv2.fitEllipse(cnt)
+                (x, y), (MA, ma), angle = ellipse
+
+                # Calculate the ratio of the major and minor axes
+                ratio = max(MA, ma) / min(MA, ma)
+
+                # Draw the contour if the ratio is above the threshold
+                if ratio >= ratio_threshold:
+                    # Generate a random color for the contour
+                    color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                    cv2.drawContours(image_with_contours, [cnt], 0, color, 3)
+                    counter += 1
+                    
+                    # Add the angle of the ellipse to the list
+                    angles.append(angle)
+                    
+                    # Add the area of the contour to the list
+                    areas.append(area)
+
+    
+    return image_with_contours, angles, areas
+
+def calculate_circular_features(data):
+    """
+    This function takes a list of angles in degrees as input and returns various circular statistical features. 
+
+    Parameters:
+    data (list of float): The input angles in degrees.
+
+    Returns:
+    tuple: The circular mean (in degrees), circular variance, circular standard deviation, circular skewness, circular kurtosis, and roundness.
+    """
+    # Convert the data to radians for calculation
+    data_rad = np.deg2rad(data)
+
+    # Calculate the circular mean of the angles. This is the average direction of the data.
+    mean_angle = np.arctan2(np.mean(np.sin(data_rad)), np.mean(np.cos(data_rad)))
+
+    # Calculate the circular variance. This is a measure of the dispersion of the angles around the circular mean.
+    # It takes values between 0 and 1, with 0 indicating that all angles are the same and 1 indicating maximum dispersion.
+    cvar = 1 - np.sqrt(np.mean(np.sin(data_rad - mean_angle))**2 + np.mean(np.cos(data_rad - mean_angle))**2)
+
+    # Calculate the circular standard deviation. This is another measure of dispersion that is more comparable to the linear standard deviation.
+    cstd = np.sqrt(-2 * np.log(1 - cvar))
+
+    # Calculate differences between data and mean angle for skewness and kurtosis calculations
+    diff = np.arctan2(np.sin(data_rad - mean_angle), np.cos(data_rad - mean_angle))
+
+    # Calculate the circular skewness. This is a measure of the asymmetry of the angles around the circular mean.
+    # The skewness is typically between -1 and 1, with 0 indicating a symmetric distribution of angles.
+    cskewness = np.mean(diff**3) / (np.mean(diff**2))**(3/2)
+
+    # Calculate the circular kurtosis. This is a measure of the "tailedness" of the angles.
+    # A kurtosis of 0 indicates a distribution with similar kurtosis to the circular uniform distribution,
+    # positive values indicate a leptokurtic distribution (more peaked than the circular uniform distribution),
+    # and negative values indicate a platykurtic distribution (less peaked than the circular uniform distribution).
+    ckurtosis = np.mean(diff**4) / (np.mean(diff**2))**2 - 3
+
+    # Convert the circular mean back to degrees for the output
+    mean_angle = np.rad2deg(mean_angle)
+
+    return mean_angle, cvar, cstd, cskewness, ckurtosis
+
+def calculate_linear_features(data):
+    # Calculate the mean
+    mean = np.mean(data)
+
+    # Calculate the variance
+    variance = np.var(data)
+
+    # Calculate the standard deviation
+    std_dev = np.std(data)
+
+    # Calculate the skewness
+    skewness = skew(data)
+
+    # Calculate the kurtosis
+    kurt = kurtosis(data)
+
+    return mean, variance, std_dev, skewness, kurt
+
+def detect_lines(image, rho, theta, threshold, minLineLength, maxLineGap):
+    
+    # Apply edge detection
+    edges = cv2.Canny(image, 50, 150, apertureSize = 3)
+    
+    # Use HoughLinesP to detect lines in the image
+    lines = cv2.HoughLinesP(edges, rho, theta, threshold, minLineLength=minLineLength, maxLineGap=maxLineGap)
+    
+    # Create a copy of the original image to draw lines on
+    line_image = np.stack((image,) * 3, axis=-1)
+    
+    # Draw the lines on the image
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            cv2.line(line_image, (x1, y1), (x2, y2), color, 2)
+    
+    return line_image
+
+def sobel_grad_mag(image, kernel_size = 5):
+    # Calculate Sobel gradients in the x and y directions
+    sobelx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=kernel_size)
+    sobely = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=kernel_size)
+    
+    # Calculate the gradient magnitude and direction
+    sobel_mag = np.hypot(sobelx, sobely)
+    sobel_dir = np.arctan2(sobely, sobelx) * (180 / np.pi)
+    
+    # Normalize to range 0 - 255 and convert to uint8
+    sobel_mag = np.uint8(sobel_mag / np.max(sobel_mag) * 255)
+    return sobel_mag, sobel_dir
         
-    if not os.path.exists(clahe_folder):
-        os.makedirs(clahe_folder)
-        
-    if not os.path.exists(tensor_folder):
-        os.makedirs(tensor_folder)
-        
-    if not os.path.exists(lbp_directions_seg_folder):
-        os.makedirs(lbp_directions_seg_folder)
+def apply_mask(original, mask):
+    # Takes a segmented image as a mask
+    
+    original = original.astype(np.float32)
+    
+    if original.ndim == 3:
+        if original.shape[2] == 3:
+            original = cv2.cvtColor(original, cv2.COLOR_RGB2GRAY)
+    
+    # Get the dimensions of both images
+    original_height, original_width = original.shape[:2]
+    segmented_height, segmented_width = mask.shape[:2]
+    
+    # Calculate the minimum width and height
+    min_width = min(original_width, segmented_width)
+    min_height = min(original_height, segmented_height)
+    
+    # Resize both images to the size of the smaller one
+    original = cv2.resize(original, (min_width, min_height))
+    mask = cv2.resize(mask, (min_width, min_height))
+    
+    # Use the mask to mask the Sobel gradient and direction
+    mask = mask.astype(bool)
+    masked_img = np.where(mask, original, 0)
+
+    return masked_img
+
+def lbp(image, points = 8, radius = 1):
+    if image.ndim == 3:
+        if image.shape[2] == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    
+    # Number of points in the circularly symmetric neighbor set
+    points = points
+    # Radius of circle
+    radius = radius
+
+    # Calculate the LBP
+    lbp = feature.local_binary_pattern(image, points, radius, method="uniform")
+
+    return lbp
+
+def contrast_stretch(image):
+    # Perform contrast stretching
+    min_val = np.min(image)
+    max_val = np.max(image)
+    stretched_image = (image - min_val) * (255.0 / (max_val - min_val))
+    stretched_image = stretched_image.astype(np.uint8)
+    return stretched_image
+
+def binary_threshold(image):
+    # Convert the image to grayscale if it has multiple channels
+    if image.ndim == 3:
+        if image.shape[2] == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Perform Otsu's thresholding
+    _, binary_image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    return binary_image
+
+def adjust_gamma(image, gamma=1.0):
+    # build a lookup table mapping the pixel values [0, 255] to
+    # their adjusted gamma values
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+        for i in np.arange(0, 256)]).astype("uint8")
+    # apply gamma correction using the lookup table
+    return cv2.LUT(image, table)
+                    
+
+def preprocessor(input_folder, output_folder):
+    os.makedirs(output_folder, exist_ok=True)
+    
+    sauvola_thresh_folder = os.path.join(output_folder, "sauvola_thresh")
+    os.makedirs(sauvola_thresh_folder, exist_ok=True)
+    clahe_folder = os.path.join(output_folder, "clahe")
+    os.makedirs(clahe_folder, exist_ok=True)
+    tensor_folder = os.path.join(output_folder, "tensor")
+    os.makedirs(tensor_folder, exist_ok=True)
+    lbp_directions_seg_folder = os.path.join(output_folder, "lbpdirseg")
+    os.makedirs(lbp_directions_seg_folder, exist_ok=True)
+    line_contour_folder = os.path.join(output_folder, "contours")
+    os.makedirs(line_contour_folder, exist_ok=True)
+    line_folder = os.path.join(output_folder, "lines")
+    os.makedirs(line_folder, exist_ok=True)
+    sobel_mag_folder = os.path.join(output_folder, "sobel_magnitude")
+    os.makedirs(sobel_mag_folder, exist_ok=True)
+    sobel_dir_folder = os.path.join(output_folder, "sobel_direction")
+    os.makedirs(sobel_dir_folder, exist_ok=True)
+    gradient_folder = os.path.join(output_folder, "edge_magnitude")
+    os.makedirs(gradient_folder, exist_ok=True)
+    directional_folder = os.path.join(output_folder, "edge_direction")
+    os.makedirs(directional_folder, exist_ok=True)    
+    lbp_folder = os.path.join(output_folder, "lbp")
+    os.makedirs(lbp_folder, exist_ok=True)
+    lbp_edge_folder = os.path.join(output_folder, "lbp_edge")
+    os.makedirs(lbp_edge_folder, exist_ok=True)
+    binary_thresh_folder = os.path.join(output_folder, "binary_thresh")
+    os.makedirs(binary_thresh_folder, exist_ok=True)
+    gamma_enhanced_folder = os.path.join(output_folder, "gamma_enhanced")
+    os.makedirs(gamma_enhanced_folder, exist_ok=True)
+
+    # Initialize an empty DataFrame to store the features for all images
+    all_features = pd.DataFrame()
 
     for filename in os.listdir(input_folder):
         if filename.endswith(".jpg") or filename.endswith(".png"):
             input_image_path = os.path.join(input_folder, filename)
             image = cv2.imread(input_image_path)
             
+            # Downsample the image by a factor
+            image = downsample_image(image, 0.2)
+            
+            # Apply Clahe Image enhancement
             clahe_image = apply_clahe(image)
             output_image_path = os.path.join(clahe_folder, filename)
             cv2.imwrite(output_image_path, clahe_image)
             
-            sobel_edge_image = Sauvola_Threshold(sobel_edge(image))
-            output_image_path = os.path.join(sobel_edge_folder, filename)
-            cv2.imwrite(output_image_path, sobel_edge_image)
+            gamma_image = adjust_gamma(clahe_image, 0.2)
+            gamma_image = gamma_image.astype(np.uint8)
+            output_image_path = os.path.join(gamma_enhanced_folder, filename)
+            cv2.imwrite(output_image_path, gamma_image)
             
-            # tensor_image = structure_tensor(image)
-            # output_image_path = os.path.join(tensor_folder, filename)
-            # cv2.imwrite(output_image_path, tensor_image)
+            # Convert to gray, apply Sauvola_Threshold, then remove small clusters.
+            segmented_image = remove_small_clusters(Sauvola_Threshold(adjust_gamma(cv2.cvtColor(clahe_image, cv2.COLOR_BGR2GRAY), 0.2)), 50)
+            segmented_image = segmented_image.astype(np.uint8)
+            output_image_path = os.path.join(sauvola_thresh_folder, filename)
+            cv2.imwrite(output_image_path, segmented_image)
             
-            lbp_directions_seg = lbp_directional_segmentation(image)
-            output_image_path = os.path.join(lbp_directions_seg_folder, filename)
-            cv2.imwrite(output_image_path, lbp_directions_seg)
+            # Attempt binary threshold
+            binary_thresh = remove_small_clusters(adjust_gamma(binary_threshold(clahe_image), 2), 50)
+            output_image_path = os.path.join(binary_thresh_folder, filename)
+            cv2.imwrite(output_image_path, binary_thresh)
             
-            # show_lab_channels(image)
+            # Probabilistic Hough Line detection
+            line_image = detect_lines(segmented_image, 1, np.pi/180, 100, 100, 10)
+            output_image_path = os.path.join(line_folder, filename)
+            cv2.imwrite(output_image_path, line_image)
+            
+            # Produce sobel magnitude and direction image representations
+            mag_img, dir_img = sobel_grad_mag(clahe_image, 7)
+            
+            output_image_path = os.path.join(sobel_mag_folder, filename)
+            cv2.imwrite(output_image_path, mag_img)
+            output_image_path = os.path.join(sobel_dir_folder, filename)
+            cv2.imwrite(output_image_path, dir_img)
+            
+            # Produce lbp image representation
+            lbp_img = np.subtract(255, contrast_stretch(lbp(clahe_image, 24, 8)))
+            output_image_path = os.path.join(lbp_folder, filename)
+            cv2.imwrite(output_image_path, lbp_img)
+            
+            # Segmented sobel magnitude and direction
+            mag_thresh = apply_mask(mag_img, segmented_image)
+            dir_thresh = apply_mask(dir_img, segmented_image)
+            
+            output_image_path = os.path.join(gradient_folder, filename)
+            cv2.imwrite(output_image_path, mag_thresh)
+            output_image_path = os.path.join(directional_folder, filename)
+            cv2.imwrite(output_image_path, dir_thresh)
+            
+            # lbp edge
+            lbp_thresh = apply_mask(lbp_img, segmented_image)
+            output_image_path = os.path.join(lbp_edge_folder, filename)
+            cv2.imwrite(output_image_path, lbp_thresh)
+            
+            # lbp_directions_seg = lbp_directional_segmentation(image)
+            # output_image_path = os.path.join(lbp_directions_seg_folder, filename)
+            # cv2.imwrite(output_image_path, lbp_directions_seg)
+            
+            # Apply contour analysis
+            contours, angles, areas = line_contour_features(segmented_image)
+            
+            output_image_path = os.path.join(line_contour_folder, filename)
+            cv2.imwrite(output_image_path, contours)
+            # Calculate circular features for angles
+            circular_features = calculate_circular_features(angles)
+            # Calculate linear features for areas
+            linear_features = calculate_linear_features(areas)
+
+            # Combine features into a single list
+            combined_features = list(circular_features) + list(linear_features)
+
+            # Create a DataFrame for the features
+            df = pd.DataFrame([combined_features], columns=['mean_angle', 'circular_variance', 'circular_std_dev', 
+                                                            'circular_skewness', 'circular_kurtosis', 'mean_area', 
+                                                            'variance_area', 'std_dev_area', 'skewness_area', 
+                                                            'kurtosis_area'])
+
+            # Add the image name to the DataFrame
+            df['image_name'] = filename
+
+            # Append the features of the current image to the DataFrame of all features
+            all_features = pd.concat([all_features, df], ignore_index=True)
+
+    # Combine the directory path and the filename
+    csv_path = os.path.join(output_folder, 'features.csv')
+    # Write the DataFrame to a CSV file
+    all_features.to_csv(csv_path, index=False)
 
 # Example usage:
-input_folder = "C:/Programs/Image Processing/Color Space/Image Pyramids with Applications/test_images"
+input_folder = "C:/Programs/Image Processing/Color Space/Image Pyramids with Applications/preprocessor_images"
 output_folder = "C:/Programs/Image Processing/Color Space/Image Pyramids with Applications/preprocessor"
 preprocessor(input_folder, output_folder)
